@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Date, ForeignKey, Text, ARRAY
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Date, ForeignKey, Text, ARRAY, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -40,6 +40,11 @@ class GSCPageData(Base):
     average_position = Column(Float)
     date = Column(Date, nullable=False)
     created_at = Column(DateTime, default=func.now())
+    last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    __table_args__ = (
+        UniqueConstraint('page_url', 'date', 'website_id', name='unique_page_data'),
+    )
 
 class GSCKeywordData(Base):
     __tablename__ = 'gsc_keyword_data'
@@ -55,6 +60,11 @@ class GSCKeywordData(Base):
     average_position = Column(Float)
     date = Column(Date, nullable=False)
     created_at = Column(DateTime, default=func.now())
+    last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    __table_args__ = (
+        UniqueConstraint('keyword', 'page_url', 'date', 'website_id', name='unique_keyword_data'),
+    )
 
 class CrawlerResult(Base):
     __tablename__ = 'crawler_results'

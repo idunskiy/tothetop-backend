@@ -136,11 +136,31 @@ def get_user_websites(user_id: int, db: Session = Depends(get_db)):
 # GSC Page Data endpoints
 @router.post("/gsc/page-data/", response_model=GSCPageDataSchema)
 def create_gsc_page_data(data: GSCPageDataCreate, db: Session = Depends(get_db)):
-    db_data = GSCPageData(**data.dict())
-    db.add(db_data)
+    
+    # Debug prints
+    print("Incoming data:", data.dict())
+    print("Page URL:", data.page_url)
+    print("Date:", data.date)
+    print("Website ID:", data.website_id)
+    
+    existing = db.query(GSCPageData).filter(
+        GSCPageData.page_url == data.page_url,
+        GSCPageData.date == data.date,
+        GSCPageData.website_id == data.website_id
+    ).first()
+    
+    if existing:
+        # Update existing record
+        for key, value in data.dict().items():
+            setattr(existing, key, value)
+    else:
+        # Create new record
+        existing = GSCPageData(**data.dict())
+        db.add(existing)
+    
     db.commit()
-    db.refresh(db_data)
-    return db_data
+    db.refresh(existing)
+    return existing
 
 @router.get("/gsc/page-data/{website_id}", response_model=List[GSCPageDataSchema])
 def get_website_page_data(website_id: int, db: Session = Depends(get_db)):
@@ -150,11 +170,24 @@ def get_website_page_data(website_id: int, db: Session = Depends(get_db)):
 # GSC Keyword Data endpoints
 @router.post("/gsc/keyword-data/", response_model=GSCKeywordDataSchema)
 def create_gsc_keyword_data(data: GSCKeywordDataCreate, db: Session = Depends(get_db)):
-    db_data = GSCKeywordData(**data.dict())
-    db.add(db_data)
+    existing = db.query(GSCKeywordData).filter(
+        GSCKeywordData.keyword == data.keyword,
+        GSCKeywordData.page_url == data.page_url,
+        GSCKeywordData.date == data.date,
+        GSCKeywordData.website_id == data.website_id
+    ).first()
+    
+    if existing:
+        # Update existing record
+        for key, value in data.dict().items():
+            setattr(existing, key, value)
+    else:
+        # Create new record
+        existing = GSCKeywordData(**data.dict())
+        db.add(existing)
     db.commit()
-    db.refresh(db_data)
-    return db_data
+    db.refresh(existing)
+    return existing
 
 @router.get("/gsc/keyword-data/{website_id}", response_model=List[GSCKeywordDataSchema])
 def get_website_keyword_data(website_id: int, db: Session = Depends(get_db)):
