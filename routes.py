@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, date
@@ -98,6 +98,27 @@ def create_website(website: WebsiteCreate, db: Session = Depends(get_db)):
     db.refresh(db_website)
     return db_website
 
+@router.get("/websites/lookup", response_model=WebsiteSchema)
+def get_website_by_url(
+    domain: str = Query(..., min_length=1, description="Website domain without protocol"),
+    user_id: int = Query(..., gt=0, description="User ID"),
+    db: Session = Depends(get_db)
+):
+    print(f"Received lookup request - Domain: {domain}, User ID: {user_id}")  # Debug log
+    
+    # Add debug logging
+    existing_domains = db.query(Website.domain).filter(Website.user_id == user_id).all()
+    print(f"Existing domains for user {user_id}: {existing_domains}")
+    
+    website = db.query(Website).filter(
+        Website.domain == domain,
+        Website.user_id == user_id
+    ).first()
+    if not website:
+        raise HTTPException(status_code=404, detail=f"Website not found for domain: {domain}")
+    return website
+
+
 @router.get("/websites/{website_id}", response_model=WebsiteSchema)
 def get_website(website_id: int, db: Session = Depends(get_db)):
     website = db.query(Website).filter(Website.id == website_id).first()
@@ -105,10 +126,12 @@ def get_website(website_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Website not found")
     return website
 
+
 @router.get("/websites/user/{user_id}", response_model=List[WebsiteSchema])
 def get_user_websites(user_id: int, db: Session = Depends(get_db)):
     websites = db.query(Website).filter(Website.user_id == user_id).all()
     return websites
+
 
 # GSC Page Data endpoints
 @router.post("/gsc/page-data/", response_model=GSCPageDataSchema)
