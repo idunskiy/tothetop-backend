@@ -83,6 +83,15 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 # Website endpoints
 @router.post("/websites/", response_model=WebsiteSchema)
 def create_website(website: WebsiteCreate, db: Session = Depends(get_db)):
+    # Check if website already exists for this user
+    existing_website = db.query(Website).filter(
+        Website.user_id == website.user_id,
+        Website.domain == website.domain
+    ).first()
+    
+    if existing_website:
+        return existing_website  # Return existing website instead of creating new one
+        
     db_website = Website(**website.dict())
     db.add(db_website)
     db.commit()
@@ -95,6 +104,11 @@ def get_website(website_id: int, db: Session = Depends(get_db)):
     if not website:
         raise HTTPException(status_code=404, detail="Website not found")
     return website
+
+@router.get("/websites/user/{user_id}", response_model=List[WebsiteSchema])
+def get_user_websites(user_id: int, db: Session = Depends(get_db)):
+    websites = db.query(Website).filter(Website.user_id == user_id).all()
+    return websites
 
 # GSC Page Data endpoints
 @router.post("/gsc/page-data/", response_model=GSCPageDataSchema)
