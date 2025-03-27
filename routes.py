@@ -14,7 +14,11 @@ from schemas import (
     AnalysisResultCreate, AnalysisResult as AnalysisResultSchema,
     PageImprovementCreate, PageImprovement as PageImprovementSchema
 )
-
+from crawler import Crawler
+from fastapi import HTTPException
+from pydantic import HttpUrl
+from typing import List, Optional, Dict
+from pydantic import BaseModel
 router = APIRouter()
 
 # Dependency
@@ -24,6 +28,41 @@ def get_db():
         yield db
     finally:
         db.close()
+        
+
+class CrawlRequest(BaseModel):
+    base_url: HttpUrl
+
+class PageData(BaseModel):
+    url: str
+    title: Optional[str] = None
+    meta_description: Optional[str] = None
+    h1: Optional[str] = None
+    h2: Optional[List[str]] = None
+    h3: Optional[List[str]] = None
+    body_text: Optional[str] = None
+    word_count: Optional[int] = None
+    parse_method: Optional[str] = None
+    status: str
+    error_message: Optional[str] = None
+
+class CrawlResponse(BaseModel):
+    pages: List[PageData]
+    statistics: Dict
+    
+# Crawl a website and extract SEO-relevant content from each page.
+@router.post("/crawl", response_model=CrawlResponse)
+async def crawl_website(request: CrawlRequest):
+    """
+    Crawl a website and extract SEO-relevant content from each page.
+    Returns both the crawled pages and statistics about the crawl.
+    """
+    try:
+        crawler = Crawler(str(request.base_url))
+        results = await crawler.crawl()
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # User endpoints
 @router.post("/users/", response_model=UserSchema)
