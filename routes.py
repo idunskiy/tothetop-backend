@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 from datetime import datetime, date
+import uuid
 
 from database import SessionLocal
 from models import User, Website, GSCPageData, GSCKeywordData, CrawlerResult, AnalysisResult, PageImprovement
@@ -47,22 +49,94 @@ class PageData(BaseModel):
     error_message: Optional[str] = None
 
 class CrawlResponse(BaseModel):
+    session_id: str
     pages: List[PageData]
     statistics: Dict
     
+class CrawlStatus(BaseModel):
+    session_id: str
+    status: str
+    pages_found: int = 0
+    pages_crawled: int = 0
+    
+crawl_sessions = {}
+
 # Crawl a website and extract SEO-relevant content from each page.
 @router.post("/crawl", response_model=CrawlResponse)
-async def crawl_website(request: CrawlRequest):
-    """
-    Crawl a website and extract SEO-relevant content from each page.
-    Returns both the crawled pages and statistics about the crawl.
-    """
+async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
     try:
+        session_id = str(uuid.uuid4())
+        
+        # Initialize the session first
+        crawl_sessions[session_id] = {
+            "status": "starting",
+            "pages_found": 0,
+            "pages_crawled": 0
+        }
+        
         crawler = Crawler(str(request.base_url))
+        
+        def update_progress(total_pages, crawled_pages):
+            crawl_sessions[session_id].update({
+                "status": crawler.status,
+                "pages_found": total_pages,
+                "pages_crawled": crawled_pages
+            })
+        
+        crawler.set_progress_callback(update_progress)
+        
         results = await crawler.crawl()
-        return results
+        
+        # Save results to database, checking for duplicates
+        saved_pages = []
+        for page in results['pages']:
+            # Check if page already exists with same content
+            existing_page = db.query(CrawlerResult).filter(
+                CrawlerResult.page_url == page['url'],
+                CrawlerResult.word_count == page['word_count'],
+                func.date(CrawlerResult.crawled_at) == func.current_date()
+            ).first()
+            
+            if not existing_page:
+                # Create new page record
+                new_page = CrawlerResult(
+                    page_url=page['url'],
+                    title=page['title'],
+                    meta_description=page['meta_description'],
+                    h1=page['h1'],
+                    h2=page['h2'],
+                    h3=page['h3'],
+                    body_text=page['body_text'],
+                    word_count=page['word_count'],
+                    status=page['status']
+                )
+                db.add(new_page)
+                saved_pages.append(page)
+        
+        db.commit()
+        
+        crawl_sessions[session_id].update({
+            "status": "completed"
+        })
+        
+        return {
+            "session_id": session_id,
+            **results
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.get("/crawl/status/{session_id}", response_model=CrawlStatus)
+async def get_crawl_status(session_id: str):
+    """Get the status of a crawl session."""
+    if session_id not in crawl_sessions:
+        raise HTTPException(status_code=404, detail="Crawl session not found")
+    
+    return {
+        "session_id": session_id,
+        **crawl_sessions[session_id]
+    }
 
 # User endpoints
 @router.post("/users/", response_model=UserSchema)

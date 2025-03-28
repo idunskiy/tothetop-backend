@@ -27,6 +27,8 @@ class Crawler:
         self.semaphore = asyncio.Semaphore(settings.MAX_WORKERS)
         self.last_request_time = 0
         self.request_delay = settings.REQUEST_DELAY
+        self.progress_callback = None
+        self.status = "starting"
         
         # Statistics tracking
         self.stats = {
@@ -53,6 +55,22 @@ class Crawler:
         """Remove fragments and normalize the URL"""
         parsed = urlparse(url)
         return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    
+    def set_progress_callback(self, callback):
+        """Set callback function for progress updates."""
+        self.progress_callback = callback
+
+    async def run_crawl(self) -> Dict:
+        """Run the crawl and report progress."""
+        try:
+            self.status = "in_progress"
+            results = await self.crawl()
+            self.status = "completed"
+            return results
+        except Exception as e:
+            self.status = "failed"
+            logger.error(f"Crawl failed: {str(e)}")
+            raise
         
     async def crawl(self) -> Dict:
         """Main crawling method that orchestrates the crawling process."""
@@ -79,7 +97,7 @@ class Crawler:
                         for url in batch
                     ]
                     await asyncio.gather(*tasks)
-            
+                    
             await self.browser.close()
         
         # Calculate final statistics
@@ -116,6 +134,19 @@ class Crawler:
         try:
             self.processed_urls.add(normalized_url)
             self.stats["pages_parsed"] += 1
+            
+            # Report progress after each URL is processed
+            # if self.progress_callback:
+            #     total_pages = len(self.processed_urls) + len(self.url_queue)
+            #     crawled_pages = len(self.processed_urls)
+            #     self.progress_callback(total_pages, crawled_pages)
+            
+            total_pages = len(self.processed_urls) + len(self.url_queue)
+            crawled_pages = len(self.processed_urls)
+            logger.info(f"Progress: {crawled_pages}/{total_pages} pages. Processing: {normalized_url}")
+            
+            if self.progress_callback:
+                self.progress_callback(total_pages, crawled_pages)
             
             # Try basic parsing first
             response = await client.get(normalized_url)
