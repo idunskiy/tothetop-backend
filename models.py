@@ -84,6 +84,7 @@ class CrawlerResult(Base):
     word_count = Column(Integer)
     crawled_at = Column(DateTime, default=func.now())
     status = Column(String(50))
+    batch_id = Column(String(255), nullable=False)
 
 class AnalysisResult(Base):
     __tablename__ = 'analysis_results'

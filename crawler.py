@@ -16,8 +16,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Crawler:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, batch_id: str):
         self.base_url = base_url
+        self.batch_id = batch_id
         self.domain = urlparse(base_url).netloc
         self.url_queue = deque([base_url])
         self.visited_urls: Set[str] = set()

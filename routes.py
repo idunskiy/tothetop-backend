@@ -34,6 +34,7 @@ def get_db():
 
 class CrawlRequest(BaseModel):
     base_url: HttpUrl
+    batch_id: str
 
 class PageData(BaseModel):
     url: str
@@ -71,10 +72,11 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
         crawl_sessions[session_id] = {
             "status": "starting",
             "pages_found": 0,
-            "pages_crawled": 0
+            "pages_crawled": 0,
+            "batch_id": request.batch_id
         }
         
-        crawler = Crawler(str(request.base_url))
+        crawler = Crawler(str(request.base_url), request.batch_id)
         
         def update_progress(total_pages, crawled_pages, current_url):
             crawl_sessions[session_id].update({
@@ -95,7 +97,7 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
             existing_page = db.query(CrawlerResult).filter(
                 CrawlerResult.page_url == page['url'],
                 CrawlerResult.word_count == page['word_count'],
-                func.date(CrawlerResult.crawled_at) == func.current_date()
+                CrawlerResult.batch_id == request.batch_id  # Add batch_id to filter
             ).first()
             
             if not existing_page:
@@ -109,7 +111,8 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
                     h3=page['h3'],
                     body_text=page['body_text'],
                     word_count=page['word_count'],
-                    status=page['status']
+                    status=page['status'],
+                    batch_id=request.batch_id
                 )
                 db.add(new_page)
                 saved_pages.append(page)
