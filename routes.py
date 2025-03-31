@@ -351,3 +351,83 @@ def create_page_improvement(improvement: PageImprovementCreate, db: Session = De
 def get_website_improvements(website_id: int, db: Session = Depends(get_db)):
     improvements = db.query(PageImprovement).filter(PageImprovement.website_id == website_id).all()
     return improvements 
+
+@router.get("/analysis/{batch_id}")
+async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
+    # Get GSC data for this batch
+    keyword_data = db.query(GSCKeywordData).filter(
+        GSCKeywordData.batch_id == batch_id
+    ).order_by(GSCKeywordData.impressions.desc()).all()
+    
+    # Get crawler results for this batch
+    crawler_results = db.query(CrawlerResult).filter(
+        CrawlerResult.batch_id == batch_id
+    ).all()
+    
+    # Create a mapping of page_url to content
+    page_content = {
+        result.page_url: {
+            'title': result.title,
+            'meta_description': result.meta_description,
+            'body_text': result.body_text,
+            'word_count': result.word_count
+        }
+        for result in crawler_results
+    }
+    
+    # Analyze each page's keywords
+    page_analysis = {}
+    for keyword in keyword_data:
+        if keyword.page_url not in page_analysis:
+            page_analysis[keyword.page_url] = {
+                'total_impressions': 0,
+                'missing_keywords': [],
+                'present_keywords': [],
+                'total_keywords': 0
+            }
+            
+        page_analysis[keyword.page_url]['total_impressions'] += keyword.impressions
+        page_analysis[keyword.page_url]['total_keywords'] += 1
+        
+        # Check if keyword exists in content
+        if keyword.page_url in page_content:
+            content = page_content[keyword.page_url]
+            combined_content = f"{content['title']} {content['meta_description']} {content['body_text']}".lower()
+            
+            if keyword.keyword.lower() in combined_content:
+                page_analysis[keyword.page_url]['present_keywords'].append({
+                    'keyword': keyword.keyword,
+                    'impressions': keyword.impressions,
+                    'clicks': keyword.clicks,
+                    'position': keyword.average_position
+                })
+            else:
+                page_analysis[keyword.page_url]['missing_keywords'].append({
+                    'keyword': keyword.keyword,
+                    'impressions': keyword.impressions,
+                    'clicks': keyword.clicks,
+                    'position': keyword.average_position
+                })
+    
+    # Sort pages by impressions
+    sorted_pages = sorted(
+        page_analysis.items(),
+        key=lambda x: x[1]['total_impressions'],
+        reverse=True
+    )
+    
+    return {
+        'pages': [
+            {
+                'url': url,
+                'total_impressions': stats['total_impressions'],
+                'total_keywords': stats['total_keywords'],
+                'missing_keywords_count': len(stats['missing_keywords']),
+                'present_keywords_count': len(stats['present_keywords']),
+                'word_count': page_content.get(url, {}).get('word_count', 0),
+                'missing_keywords': stats['missing_keywords'],
+                'present_keywords': stats['present_keywords']
+            }
+            for url, stats in sorted_pages
+        ]
+    }
