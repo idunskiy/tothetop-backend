@@ -38,12 +38,13 @@ class GSCPageData(Base):
     impressions = Column(Integer, default=0)
     ctr = Column(Float)
     average_position = Column(Float)
+    batch_id = Column(String(255), nullable=False)
     date = Column(Date, nullable=False)
     created_at = Column(DateTime, default=func.now())
     last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
     
     __table_args__ = (
-        UniqueConstraint('page_url', 'date', 'website_id', name='unique_page_data'),
+        UniqueConstraint('page_url', 'date', 'website_id', 'batch_id', name='unique_page_data'),
     )
 
 class GSCKeywordData(Base):
@@ -59,11 +60,12 @@ class GSCKeywordData(Base):
     ctr = Column(Float)
     average_position = Column(Float)
     date = Column(Date, nullable=False)
+    batch_id = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=func.now())
     last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
     
     __table_args__ = (
-        UniqueConstraint('keyword', 'page_url', 'date', 'website_id', name='unique_keyword_data'),
+        UniqueConstraint('keyword', 'page_url', 'date', 'website_id', 'batch_id', name='unique_keyword_data'),
     )
 
 class CrawlerResult(Base):

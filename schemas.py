@@ -45,6 +45,7 @@ class GSCPageDataBase(BaseModel):
     ctr: Optional[float] = None
     average_position: Optional[float] = None
     date: date
+    batch_id: str  
 
 class GSCPageDataCreate(GSCPageDataBase):
     user_id: int
@@ -67,6 +68,7 @@ class GSCKeywordDataBase(BaseModel):
     ctr: Optional[float] = None
     average_position: Optional[float] = None
     date: date
+    batch_id: str  
 
 class GSCKeywordDataCreate(GSCKeywordDataBase):
     user_id: int

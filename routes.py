@@ -76,11 +76,12 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
         
         crawler = Crawler(str(request.base_url))
         
-        def update_progress(total_pages, crawled_pages):
+        def update_progress(total_pages, crawled_pages, current_url):
             crawl_sessions[session_id].update({
                 "status": crawler.status,
                 "pages_found": total_pages,
-                "pages_crawled": crawled_pages
+                "pages_crawled": crawled_pages,
+                "current_url": current_url
             })
         
         crawler.set_progress_callback(update_progress)
@@ -133,6 +134,13 @@ async def get_crawl_status(session_id: str):
     if session_id not in crawl_sessions:
         raise HTTPException(status_code=404, detail="Crawl session not found")
     
+     # Add debug logging
+    print("Crawl Status Session data:", crawl_sessions[session_id])
+    print("Crawl Status Pages found:", crawl_sessions[session_id].get("pages_found"))
+    print("Crawl Status Pages crawled:", crawl_sessions[session_id].get("pages_crawled"))
+    print("Crawl Status Pages crawled:", crawl_sessions[session_id].get("current_url"))
+    print("Crawl Status Status:", crawl_sessions[session_id].get("status"))
+    
     return {
         "session_id": session_id,
         **crawl_sessions[session_id]
@@ -141,11 +149,26 @@ async def get_crawl_status(session_id: str):
 # User endpoints
 @router.post("/users/", response_model=UserSchema)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = User(**user.dict())
-    db.add(db_user)
+    # First check if user exists
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
+        # Either return the existing user
+        return existing_user
+        # Or update the existing user's information
+        # existing_user.name = user.name
+        # existing_user.google_id = user.google_id
+        # db.commit()
+        # return existing_user
+    
+    # If user doesn't exist, create new user
+    new_user = User(
+        email=user.email,
+        name=user.name,
+        google_id=user.google_id
+    )
+    db.add(new_user)
     db.commit()
-    db.refresh(db_user)
-    return db_user
+    return new_user
 
 @router.get("/users/{user_id}", response_model=UserSchema)
 def get_user(user_id: int, db: Session = Depends(get_db)):
@@ -212,15 +235,16 @@ def get_user_websites(user_id: int, db: Session = Depends(get_db)):
 def create_gsc_page_data(data: GSCPageDataCreate, db: Session = Depends(get_db)):
     
     # Debug prints
-    print("Incoming data:", data.dict())
+    print("Page Incoming data:", data.dict())
     print("Page URL:", data.page_url)
-    print("Date:", data.date)
-    print("Website ID:", data.website_id)
-    
+    print("Page Date:", data.date)
+    print("Page Website ID:", data.website_id)
+    print("Page Batch ID:", data.batch_id)
     existing = db.query(GSCPageData).filter(
         GSCPageData.page_url == data.page_url,
         GSCPageData.date == data.date,
-        GSCPageData.website_id == data.website_id
+        GSCPageData.website_id == data.website_id,
+        GSCPageData.batch_id == data.batch_id
     ).first()
     
     if existing:
@@ -244,11 +268,19 @@ def get_website_page_data(website_id: int, db: Session = Depends(get_db)):
 # GSC Keyword Data endpoints
 @router.post("/gsc/keyword-data/", response_model=GSCKeywordDataSchema)
 def create_gsc_keyword_data(data: GSCKeywordDataCreate, db: Session = Depends(get_db)):
+    print("Keyword Incoming data:", data.dict())
+    print("Keyword:", data.keyword)
+    print("Keyword Page URL:", data.page_url)
+    print("Keyword Date:", data.date)
+    print("Keyword Website ID:", data.website_id)
+    print("Keyword Batch ID:", data.batch_id)
+    
     existing = db.query(GSCKeywordData).filter(
         GSCKeywordData.keyword == data.keyword,
         GSCKeywordData.page_url == data.page_url,
         GSCKeywordData.date == data.date,
-        GSCKeywordData.website_id == data.website_id
+        GSCKeywordData.website_id == data.website_id,
+        GSCKeywordData.batch_id == data.batch_id,
     ).first()
     
     if existing:
@@ -264,8 +296,15 @@ def create_gsc_keyword_data(data: GSCKeywordDataCreate, db: Session = Depends(ge
     return existing
 
 @router.get("/gsc/keyword-data/{website_id}", response_model=List[GSCKeywordDataSchema])
-def get_website_keyword_data(website_id: int, db: Session = Depends(get_db)):
-    data = db.query(GSCKeywordData).filter(GSCKeywordData.website_id == website_id).all()
+def get_website_keyword_data(
+    website_id: int, 
+    batch_id: Optional[str] = None,  # Add this parameter
+    db: Session = Depends(get_db)
+    ):
+    query = db.query(GSCKeywordData).filter(GSCKeywordData.website_id == website_id)
+    if batch_id:
+        query = query.filter(GSCKeywordData.batch_id == batch_id)
+    data = query.all()
     return data
 
 # Crawler Result endpoints

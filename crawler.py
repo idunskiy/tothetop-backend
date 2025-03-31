@@ -29,6 +29,9 @@ class Crawler:
         self.request_delay = settings.REQUEST_DELAY
         self.progress_callback = None
         self.status = "starting"
+        self.pages_found = 0
+        self.pages_crawled = 0
+        self.current_url = None
         
         # Statistics tracking
         self.stats = {
@@ -124,15 +127,15 @@ class Crawler:
 
     async def process_url(self, url: str, client: httpx.AsyncClient) -> None:
         """Process a single URL and extract its content."""
-        normalized_url = self.normalize_url(url)
-        if normalized_url in self.processed_urls:
+        current_url = self.normalize_url(url)
+        if current_url in self.processed_urls:
             return
             
-        if not self.is_allowed(normalized_url):
+        if not self.is_allowed(current_url):
             return
             
         try:
-            self.processed_urls.add(normalized_url)
+            self.processed_urls.add(current_url)
             self.stats["pages_parsed"] += 1
             
             # Report progress after each URL is processed
@@ -143,38 +146,39 @@ class Crawler:
             
             total_pages = len(self.processed_urls) + len(self.url_queue)
             crawled_pages = len(self.processed_urls)
-            logger.info(f"Progress: {crawled_pages}/{total_pages} pages. Processing: {normalized_url}")
+            logger.info(f"Progress: {crawled_pages}/{total_pages} pages. Processing: {current_url}")
+            
             
             if self.progress_callback:
-                self.progress_callback(total_pages, crawled_pages)
+                self.progress_callback(total_pages, crawled_pages, current_url)
             
             # Try basic parsing first
-            response = await client.get(normalized_url)
+            response = await client.get(current_url)
             soup = BeautifulSoup(response.text, 'html.parser')
             
             # Extract content using basic parsing
-            page_data = await self.extract_content_basic(soup, normalized_url)
+            page_data = await self.extract_content_basic(soup, current_url)
             
             # Check if we need to try Playwright
             if self.needs_playwright(page_data):
-                page_data = await self.extract_content_playwright(normalized_url)
+                page_data = await self.extract_content_playwright(current_url)
             
             self.results.append(page_data)
             self.stats["successful_pages"] += 1
             
             # Extract and queue new URLs
-            await self.extract_and_queue_urls(soup, normalized_url)
+            await self.extract_and_queue_urls(soup, current_url)
             
         except Exception as e:
-            logger.error(f"Error processing {normalized_url}: {str(e)}")
+            logger.error(f"Error processing {current_url}: {str(e)}")
             self.results.append({
-                "url": normalized_url,
+                "url": current_url,
                 "status": "fail",
                 "error_message": str(e)
             })
             self.stats["failed_pages"] += 1
             self.stats["failed_urls"].append({
-                "url": normalized_url,
+                "url": current_url,
                 "error": str(e)
             })
 
@@ -236,15 +240,15 @@ class Crawler:
         for a in soup.find_all("a", href=True):
             href = a["href"]
             full_url = urljoin(base_url, href)
-            normalized_url = self.normalize_url(full_url)
+            current_url = self.normalize_url(full_url)
             
             if (
-                self.is_same_domain(normalized_url) and
-                normalized_url not in self.processed_urls and
-                normalized_url not in self.visited_urls and
-                self.is_allowed(normalized_url)
+                self.is_same_domain(current_url) and
+                current_url not in self.processed_urls and
+                current_url not in self.visited_urls and
+                self.is_allowed(current_url)
             ):
-                self.url_queue.append(normalized_url)
+                self.url_queue.append(current_url)
 
     def is_same_domain(self, url: str) -> bool:
         """Check if URL is from the same domain."""
