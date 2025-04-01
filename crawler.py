@@ -46,6 +46,14 @@ class Crawler:
             "parse_time_seconds": 0
         }
         
+        self.session_data = {
+        'status': 'starting',
+        'pages_found': 0,
+        'pages_crawled': 0,
+        'batch_id': batch_id,
+        'current_url': None
+         }
+        
         # Initialize robots.txt parser
         self.robots_parser = RobotFileParser()
         self.robots_parser.set_url(f"{base_url}/robots.txt")
@@ -62,6 +70,7 @@ class Crawler:
     
     def set_progress_callback(self, callback):
         """Set callback function for progress updates."""
+        print("Setting progress callback")
         self.progress_callback = callback
 
     async def run_crawl(self) -> Dict:
@@ -139,19 +148,20 @@ class Crawler:
             self.processed_urls.add(current_url)
             self.stats["pages_parsed"] += 1
             
-            # Report progress after each URL is processed
-            # if self.progress_callback:
-            #     total_pages = len(self.processed_urls) + len(self.url_queue)
-            #     crawled_pages = len(self.processed_urls)
-            #     self.progress_callback(total_pages, crawled_pages)
+            # Update these values with more stable counts
+            self.pages_crawled = len(self.processed_urls)
+            self.pages_found = len(self.processed_urls | self.visited_urls | set(self.url_queue))
+            self.current_url = current_url
             
-            total_pages = len(self.processed_urls) + len(self.url_queue)
-            crawled_pages = len(self.processed_urls)
-            logger.info(f"Progress: {crawled_pages}/{total_pages} pages. Processing: {current_url}")
+            self.session_data['pages_crawled'] = self.pages_crawled
+            self.session_data['pages_found'] = self.pages_found
+            self.session_data['current_url'] = current_url
             
+            # Log the stable progress
+            logger.info(f"Progress: {self.pages_crawled} out of {self.pages_found} pages crawled. Current: {current_url}")
             
             if self.progress_callback:
-                self.progress_callback(total_pages, crawled_pages, current_url)
+                self.progress_callback(self.pages_found, self.pages_crawled, current_url)
             
             # Try basic parsing first
             response = await client.get(current_url)

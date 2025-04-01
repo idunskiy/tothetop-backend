@@ -21,6 +21,9 @@ from fastapi import HTTPException
 from pydantic import HttpUrl
 from typing import List, Optional, Dict
 from pydantic import BaseModel
+import asyncio
+from fastapi.responses import JSONResponse
+
 router = APIRouter()
 
 # Dependency
@@ -54,15 +57,98 @@ class CrawlResponse(BaseModel):
     pages: List[PageData]
     statistics: Dict
     
+
+class PageData(BaseModel):
+    url: str
+    title: Optional[str] = None
+    meta_description: Optional[str] = None
+    h1: Optional[str] = None
+    h2: Optional[List[str]] = None
+    h3: Optional[List[str]] = None
+    body_text: Optional[str] = None
+    word_count: Optional[int] = None
+    parse_method: Optional[str] = None
+    status: str
+    error_message: Optional[str] = None
+    
 class CrawlStatus(BaseModel):
     session_id: str
     status: str
     pages_found: int = 0
     pages_crawled: int = 0
+    current_url: Optional[str] = None
+    pages: Optional[List[PageData]] = None
     
 crawl_sessions = {}
 
 # Crawl a website and extract SEO-relevant content from each page.
+# @router.post("/crawl", response_model=CrawlResponse)
+# async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
+#     try:
+#         session_id = str(uuid.uuid4())
+        
+#         # Initialize the session first
+#         crawl_sessions[session_id] = {
+#             "status": "starting",
+#             "pages_found": 0,
+#             "pages_crawled": 0,
+#             "batch_id": request.batch_id
+#         }
+        
+#         crawler = Crawler(str(request.base_url), request.batch_id)
+        
+#         def update_progress(total_pages, crawled_pages, current_url):
+#             crawl_sessions[session_id].update({
+#                 "status": crawler.status,
+#                 "pages_found": total_pages,
+#                 "pages_crawled": crawled_pages,
+#                 "current_url": current_url
+#             })
+        
+#         crawler.set_progress_callback(update_progress)
+        
+#         results = await crawler.crawl()
+        
+#         # Save results to database, checking for duplicates
+#         saved_pages = []
+#         for page in results['pages']:
+#             # Check if page already exists with same content
+#             existing_page = db.query(CrawlerResult).filter(
+#                 CrawlerResult.page_url == page['url'],
+#                 CrawlerResult.word_count == page['word_count'],
+#                 CrawlerResult.batch_id == request.batch_id  # Add batch_id to filter
+#             ).first()
+            
+#             if not existing_page:
+#                 # Create new page record
+#                 new_page = CrawlerResult(
+#                     page_url=page['url'],
+#                     title=page['title'],
+#                     meta_description=page['meta_description'],
+#                     h1=page['h1'],
+#                     h2=page['h2'],
+#                     h3=page['h3'],
+#                     body_text=page['body_text'],
+#                     word_count=page['word_count'],
+#                     status=page['status'],
+#                     batch_id=request.batch_id
+#                 )
+#                 db.add(new_page)
+#                 saved_pages.append(page)
+        
+#         db.commit()
+        
+#         crawl_sessions[session_id].update({
+#             "status": "completed"
+#         })
+        
+#         return {
+#             "session_id": session_id,
+#             **results
+#         }
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/crawl", response_model=CrawlResponse)
 async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
     try:
@@ -73,35 +159,59 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
             "status": "starting",
             "pages_found": 0,
             "pages_crawled": 0,
-            "batch_id": request.batch_id
+            "batch_id": request.batch_id,
+            "current_url": None
         }
         
+        # Create and start the crawler
         crawler = Crawler(str(request.base_url), request.batch_id)
         
         def update_progress(total_pages, crawled_pages, current_url):
             crawl_sessions[session_id].update({
-                "status": crawler.status,
+                "status": "in_progress",
                 "pages_found": total_pages,
                 "pages_crawled": crawled_pages,
                 "current_url": current_url
             })
         
         crawler.set_progress_callback(update_progress)
+
+        # Start immediate response with session_id
+        initial_response = {
+            "session_id": session_id,
+            "pages": [],
+            "statistics": {}
+        }
+
+        # Start crawling in a separate task
+        asyncio.create_task(
+            run_crawl_task(
+                crawler=crawler,
+                session_id=session_id,
+                db=db,
+                batch_id=request.batch_id
+            )
+        )
         
+        return initial_response
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_id: str):
+    try:
         results = await crawler.crawl()
         
-        # Save results to database, checking for duplicates
+        # Save results to database
         saved_pages = []
         for page in results['pages']:
-            # Check if page already exists with same content
             existing_page = db.query(CrawlerResult).filter(
                 CrawlerResult.page_url == page['url'],
                 CrawlerResult.word_count == page['word_count'],
-                CrawlerResult.batch_id == request.batch_id  # Add batch_id to filter
+                CrawlerResult.batch_id == batch_id
             ).first()
             
             if not existing_page:
-                # Create new page record
                 new_page = CrawlerResult(
                     page_url=page['url'],
                     title=page['title'],
@@ -112,42 +222,73 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
                     body_text=page['body_text'],
                     word_count=page['word_count'],
                     status=page['status'],
-                    batch_id=request.batch_id
+                    batch_id=batch_id
                 )
                 db.add(new_page)
                 saved_pages.append(page)
         
         db.commit()
         
+        # print("Completed results in run_crawl_task:", results['pages'])
+        # Update final status
         crawl_sessions[session_id].update({
-            "status": "completed"
+            "status": "completed",
+            "pages": saved_pages,
+            "statistics": results['statistics']
         })
         
-        return {
-            "session_id": session_id,
-            **results
-        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        crawl_sessions[session_id].update({
+            "status": "failed",
+            "error": str(e)
+        })
     
 
 @router.get("/crawl/status/{session_id}", response_model=CrawlStatus)
 async def get_crawl_status(session_id: str):
     """Get the status of a crawl session."""
-    if session_id not in crawl_sessions:
-        raise HTTPException(status_code=404, detail="Crawl session not found")
-    
-     # Add debug logging
-    print("Crawl Status Session data:", crawl_sessions[session_id])
-    print("Crawl Status Pages found:", crawl_sessions[session_id].get("pages_found"))
-    print("Crawl Status Pages crawled:", crawl_sessions[session_id].get("pages_crawled"))
-    print("Crawl Status Pages crawled:", crawl_sessions[session_id].get("current_url"))
-    print("Crawl Status Status:", crawl_sessions[session_id].get("status"))
-    
-    return {
-        "session_id": session_id,
-        **crawl_sessions[session_id]
-    }
+    try:
+        if session_id not in crawl_sessions:
+            return JSONResponse(
+                status_code=404,
+                content={"detail": "Crawl session not found"}
+            )
+        
+        session_data = crawl_sessions[session_id]
+        
+        # Include pages in the response if they exist and status is completed
+        print("Full session data:", session_data)  # Debug log
+        
+        # Create response with all fields including pages
+        response_data = CrawlStatus(
+            session_id=session_id,
+            status=session_data["status"],
+            pages_found=session_data["pages_found"],
+            pages_crawled=session_data["pages_crawled"],
+            current_url=session_data["current_url"],
+            pages=session_data.get("pages", None)  # Include pages if they exist
+        )
+        
+        # # Add pages to response if they exist
+        # if session_data["status"] == "completed":
+        #     print("Session data:", session_data)  # Debug log
+        #     if "pages" in session_data:
+        #         print(f"Found {len(session_data['pages'])} pages")  # Debug log
+        #         response_data["pages"] = session_data["pages"]
+        #         print("Response data with pages:", response_data)  # Debug log
+        #     else:
+        #         print("No pages found in session data")  # Debug log
+        
+        return response_data
+
+    except Exception as e:
+        print(f"Error in get_crawl_status: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(e)}
+        )
+
+
 
 # User endpoints
 @router.post("/users/", response_model=UserSchema)
