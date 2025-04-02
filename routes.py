@@ -269,16 +269,6 @@ async def get_crawl_status(session_id: str):
             pages=session_data.get("pages", None)  # Include pages if they exist
         )
         
-        # # Add pages to response if they exist
-        # if session_data["status"] == "completed":
-        #     print("Session data:", session_data)  # Debug log
-        #     if "pages" in session_data:
-        #         print(f"Found {len(session_data['pages'])} pages")  # Debug log
-        #         response_data["pages"] = session_data["pages"]
-        #         print("Response data with pages:", response_data)  # Debug log
-        #     else:
-        #         print("No pages found in session data")  # Debug log
-        
         return response_data
 
     except Exception as e:
@@ -289,7 +279,28 @@ async def get_crawl_status(session_id: str):
         )
 
 
-
+@router.post("/crawl/stop/{session_id}")
+async def stop_crawl(session_id: str):
+    try:
+        if session_id not in crawl_sessions:
+            return JSONResponse(
+                status_code=404,
+                content={"detail": "Crawl session not found"}
+            )
+        
+        # Update session status to stopped
+        crawl_sessions[session_id].update({
+            "status": "stopped",
+            "pages": crawl_sessions[session_id].get("pages", [])
+        })
+        
+        return {"status": "stopped"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(e)}
+        )
+        
 # User endpoints
 @router.post("/users/", response_model=UserSchema)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
