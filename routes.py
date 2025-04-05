@@ -23,8 +23,14 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel
 import asyncio
 from fastapi.responses import JSONResponse
-
+from services.ai_service import AIService
+import logging
 router = APIRouter()
+
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Dependency
 def get_db():
@@ -583,3 +589,25 @@ async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
             for url, stats in sorted_pages
         ]
     }
+    
+class TextRequest(BaseModel):
+    text: str
+    
+ai_service = AIService()
+    
+@router.post("/process-text")
+async def process_text(request: TextRequest):
+    try:
+        logger.debug(f"Processing text in backend: {request.text}")
+        response = ai_service.process_invoice(request.text)
+        if response is None:
+            raise HTTPException(
+                status_code=408, 
+                detail="AI service timeout"
+            )
+        logger.debug(f"Got response from AI service: {response}")
+        if response is None:
+            raise HTTPException(status_code=408, detail="AI service timeout")
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
