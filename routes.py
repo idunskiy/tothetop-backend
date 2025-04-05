@@ -25,6 +25,8 @@ import asyncio
 from fastapi.responses import JSONResponse
 from services.ai_service import AIService
 import logging
+from schemas import IntentRequest
+
 router = APIRouter()
 
 
@@ -228,7 +230,8 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
                     body_text=page['body_text'],
                     word_count=page['word_count'],
                     status=page['status'],
-                    batch_id=batch_id
+                    batch_id=batch_id,
+                    full_text=page['full_text']
                 )
                 db.add(new_page)
                 saved_pages.append(page)
@@ -528,7 +531,8 @@ async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
             'title': result.title,
             'meta_description': result.meta_description,
             'body_text': result.body_text,
-            'word_count': result.word_count
+            'word_count': result.word_count,
+            'full_text': result.full_text
         }
         for result in crawler_results
     }
@@ -584,7 +588,10 @@ async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
                 'present_keywords_count': len(stats['present_keywords']),
                 'word_count': page_content.get(url, {}).get('word_count', 0),
                 'missing_keywords': stats['missing_keywords'],
-                'present_keywords': stats['present_keywords']
+                'present_keywords': stats['present_keywords'],
+                'full_text': page_content.get(url, {}).get('full_text', ''),
+                'title': page_content.get(url, {}).get('title', ''),
+                'meta_description': page_content.get(url, {}).get('meta_description', '')
             }
             for url, stats in sorted_pages
         ]
@@ -610,4 +617,23 @@ async def process_text(request: TextRequest):
             raise HTTPException(status_code=408, detail="AI service timeout")
         return response
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/process-intent")
+async def process_intent(request: IntentRequest):
+    try:
+        logger.debug(f"Processing intent in backend: {request}")
+        request_dict = request.model_dump() 
+        logger.debug(f"Request dictionary: {request_dict}")
+        response = ai_service.process_intent(request_dict)
+        logger.debug(f"AI service response: {response}")  # Add this log
+        
+        if response is None:  # Add this check
+            logger.error("AI service returned None")
+            raise HTTPException(status_code=500, detail="AI service returned no response")
+            
+        return response
+    except Exception as e:
+        logger.error(f"Error processing intent: {str(e)}")  # Log the specific error
+        logger.exception("Full traceback:")  # This will log the full traceback
         raise HTTPException(status_code=500, detail=str(e))

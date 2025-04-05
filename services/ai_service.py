@@ -6,7 +6,7 @@ import sys
 from typing import Optional, Dict, Any, Protocol, Type
 import time
 from abc import ABC, abstractmethod
-from services.event_handlers import TextAnalysisProcessor, InvoiceProcessor
+from services.event_handlers import TextAnalysisProcessor, InvoiceProcessor, IntentProcessor
 
 # Set up logging properly
 logging.basicConfig(
@@ -30,12 +30,13 @@ class AIService:
         # Register processors
         self.register_processor('text_analysis', TextAnalysisProcessor)
         self.register_processor('invoice', InvoiceProcessor)
-        
+        self.register_processor('intent', IntentProcessor)
         # Queue configuration
         self.queues = {
             'text_analysis': 'text_analysis_queue',
             'invoice': 'invoice_queue',
-            'responses': 'response_queue'
+            'responses': 'response_queue',
+            'intent': 'intent_queue'
         }
     
     def register_processor(self, event_type: str, processor: Type[MessageProcessor]):
@@ -47,7 +48,8 @@ class AIService:
         """Prepare message based on event type"""
         request_id = str(uuid.uuid4())
         
-        if event_type == 'invoice' and not isinstance(data, str):
+        # Add intent to the JSON conversion
+        if event_type in ['invoice', 'intent'] and not isinstance(data, str):
             data = json.dumps(data)
             
         return {
@@ -127,6 +129,11 @@ class AIService:
     def process_custom(self, event_type: str, data: Any, timeout: int = 30) -> Optional[dict]:
         """Process any registered event type"""
         return self.process_event(event_type, data, timeout)
+    
+    def process_intent(self, intent_data: Dict[str, Any], timeout: int = 30) -> Optional[dict]:
+        """Process intent"""
+        logger.debug(f"Processing intent with data: {intent_data}")
+        return self.process_event('intent', intent_data, timeout)
 
     def _create_connection(self):
         """Create a new RabbitMQ connection and channel"""

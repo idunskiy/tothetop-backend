@@ -195,6 +195,7 @@ class Crawler:
 
     async def extract_content_basic(self, soup: BeautifulSoup, url: str) -> Dict:
         """Extract content using basic HTML parsing."""
+        # Get individual elements
         title = soup.title.string if soup.title else None
         meta_desc = soup.find("meta", {"name": "description"})
         meta_description = meta_desc.get("content") if meta_desc else None
@@ -208,7 +209,44 @@ class Crawler:
         # Extract clean body content using trafilatura
         body_text = trafilatura.extract(str(soup))
         
-        word_count = len(body_text.split()) if body_text else 0
+        # Create full_text with markup
+        full_text_parts = []
+        
+        if title:
+            full_text_parts.append(f"[TITLE] {title}")
+        
+        if meta_description:
+            full_text_parts.append(f"[META_DESCRIPTION] {meta_description}")
+        
+        if h1_text:
+            full_text_parts.append(f"[H1] {h1_text}")
+        
+        # Add H2s and their associated content
+        for h2 in soup.find_all("h2"):
+            h2_text = h2.get_text().strip()
+            full_text_parts.append(f"[H2] {h2_text}")
+            
+            # Get content until next h2 or h1
+            current = h2.next_sibling
+            section_content = []
+            while current and not (current.name == 'h2' or current.name == 'h1'):
+                if current.name == 'h3':
+                    section_content.append(f"[H3] {current.get_text().strip()}")
+                elif current.string and current.string.strip():
+                    section_content.append(current.string.strip())
+                current = current.next_sibling
+            if section_content:
+                full_text_parts.append(" ".join(section_content))
+        
+        # Add the main body text with markup
+        if body_text:
+            full_text_parts.append(f"[BODY] {body_text}")
+        
+        # Combine everything into full_text
+        full_text = "\n\n".join(full_text_parts)
+        
+        # Calculate word count from body_text
+        word_count = len(full_text.split()) if full_text else 0
         
         return {
             "url": url,
@@ -218,11 +256,12 @@ class Crawler:
             "h2": h2_tags,
             "h3": h3_tags,
             "body_text": body_text,
+            "full_text": full_text,  # Now includes body text
             "word_count": word_count,
             "parse_method": "basic",
             "status": "partial" if word_count < settings.MIN_WORD_COUNT else "success"
         }
-
+    
     async def extract_content_playwright(self, url: str) -> Dict:
         """Extract content using Playwright for JavaScript-rendered pages."""
         page = await self.browser.new_page()

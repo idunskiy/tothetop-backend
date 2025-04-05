@@ -81,6 +81,7 @@ class CrawlerResult(Base):
     h2 = Column(JSONB)
     h3 = Column(JSONB)
     body_text = Column(Text)
+    full_text = Column(Text)
     word_count = Column(Integer)
     crawled_at = Column(DateTime, default=func.now())
     status = Column(String(50))

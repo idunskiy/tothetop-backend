@@ -94,6 +94,7 @@ class CrawlerResultBase(BaseModel):
     body_text: Optional[str] = None
     word_count: Optional[int] = None
     status: Optional[str] = None
+    full_text: Optional[str] = None
 
 class CrawlerResultCreate(CrawlerResultBase):
     user_id: int
@@ -147,3 +148,10 @@ class PageImprovement(PageImprovementBase):
 
     class Config:
         from_attributes = True 
+
+class IntentRequest(BaseModel):
+    full_text: str
+    url: Optional[str] = None
+    title: Optional[str] = None
+    meta_description: Optional[str] = None
+    target_keywords: Optional[List[str]] = None
