@@ -3,8 +3,10 @@ import json
 import uuid
 import logging
 import sys
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Protocol, Type
 import time
+from abc import ABC, abstractmethod
+from services.event_handlers import TextAnalysisProcessor, InvoiceProcessor
 
 # Set up logging properly
 logging.basicConfig(
@@ -16,16 +18,116 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class MessageProcessor(Protocol):
+    def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        pass
+
 class AIService:
     def __init__(self):
         self.responses = {}
-        # Define available event types and their queues
+        self.processors: Dict[str, Type[MessageProcessor]] = {}
+        
+        # Register processors
+        self.register_processor('text_analysis', TextAnalysisProcessor)
+        self.register_processor('invoice', InvoiceProcessor)
+        
+        # Queue configuration
         self.queues = {
             'text_analysis': 'text_analysis_queue',
             'invoice': 'invoice_queue',
             'responses': 'response_queue'
         }
     
+    def register_processor(self, event_type: str, processor: Type[MessageProcessor]):
+        """Register a processor for an event type"""
+        self.processors[event_type] = processor
+        logger.debug(f"Registered processor {processor.__name__} for event type {event_type}")
+    
+    def prepare_message(self, event_type: str, data: Any) -> Dict[str, Any]:
+        """Prepare message based on event type"""
+        request_id = str(uuid.uuid4())
+        
+        if event_type == 'invoice' and not isinstance(data, str):
+            data = json.dumps(data)
+            
+        return {
+            'request_id': request_id,
+            'event_type': event_type,
+            'text': data
+        }
+    
+    def process_event(self, event_type: str, data: Any, timeout: int = 30) -> Optional[dict]:
+        """Generic event processing method"""
+        if event_type not in self.queues:
+            logger.error(f"Unsupported event type: {event_type}")
+            raise ValueError(f"Unsupported event type: {event_type}")
+        
+        processor = self.processors.get(event_type)
+        if not processor:
+            raise ValueError(f"No processor registered for event type: {event_type}")
+            
+        connection = None
+        channel = None
+        try:
+            logger.info(f"Processing {event_type} request")
+            connection, channel = self._create_connection()
+            
+            message = self.prepare_message(event_type, data)
+            logger.debug(f"Prepared message: {message}")
+            
+            # Set up response consumer
+            channel.basic_consume(
+                queue=self.queues['responses'],
+                on_message_callback=self._on_response,
+                auto_ack=True
+            )
+            
+            # Publish message
+            channel.basic_publish(
+                exchange='',
+                routing_key=self.queues[event_type],
+                body=json.dumps(message)
+            )
+            
+            return self._wait_for_response(connection, message['request_id'], timeout)
+            
+        except Exception as e:
+            logger.error(f"Error processing {event_type}: {str(e)}", exc_info=True)
+            raise
+        finally:
+            self._cleanup_connections(channel, connection)
+    
+    def _wait_for_response(self, connection, request_id: str, timeout: int) -> Optional[dict]:
+        """Wait for response with timeout"""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                connection.process_data_events()
+                if request_id in self.responses:
+                    response = self.responses.pop(request_id)
+                    logger.debug(f"Received response: {response}")
+                    return response
+                time.sleep(0.1)
+            except Exception as e:
+                logger.error(f"Error while waiting for response: {str(e)}", exc_info=True)
+                raise
+        
+        logger.warning("Timeout reached waiting for response")
+        return None
+
+    # Convenience methods for specific event types
+    def process_text(self, text: str, timeout: int = 30) -> Optional[dict]:
+        """Process text analysis"""
+        return self.process_event('text_analysis', text, timeout)
+    
+    def process_invoice(self, invoice_data: Dict[str, Any], timeout: int = 30) -> Optional[dict]:
+        """Process invoice"""
+        return self.process_event('invoice', invoice_data, timeout)
+    
+    def process_custom(self, event_type: str, data: Any, timeout: int = 30) -> Optional[dict]:
+        """Process any registered event type"""
+        return self.process_event(event_type, data, timeout)
+
     def _create_connection(self):
         """Create a new RabbitMQ connection and channel"""
         try:
@@ -57,97 +159,11 @@ class AIService:
         except Exception as e:
             logger.error(f"Error processing response: {str(e)}", exc_info=True)
     
-    def process_text(self, text: str, event_type: str = 'text_analysis', timeout: int = 30) -> Optional[dict]:
-        """
-        Send text to AI service and wait for response
-        Args:
-            text: The text to process
-            event_type: Type of event ('text_analysis' or 'invoice')
-            timeout: How long to wait for response in seconds
-        Returns:
-            Optional[dict]: The response from the AI service or None if timeout
-        """
-        if event_type not in self.queues:
-            logger.error(f"Unsupported event type: {event_type}")
-            raise ValueError(f"Unsupported event type: {event_type}")
-            
-        connection = None
-        channel = None
+    def _cleanup_connections(self, channel, connection):
         try:
-            logger.info(f"Processing {event_type} request")
-            # Create a new connection for this request
-            connection, channel = self._create_connection()
-            
-            # Generate unique request ID
-            request_id = str(uuid.uuid4())
-            
-            # Prepare message with event type
-            message = {
-                'request_id': request_id,
-                'event_type': event_type,
-                'text': text
-            }
-            
-            logger.debug(f"Sending {event_type} message: {message}")
-            
-            # Set up response consumer before publishing
-            channel.basic_consume(
-                queue=self.queues['responses'],
-                on_message_callback=self._on_response,
-                auto_ack=True
-            )
-            
-            # Publish message to appropriate queue
-            channel.basic_publish(
-                exchange='',
-                routing_key=self.queues[event_type],
-                body=json.dumps(message)
-            )
-            
-            # Wait for response
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                try:
-                    connection.process_data_events()
-                    if request_id in self.responses:
-                        response = self.responses.pop(request_id)
-                        logger.debug(f"Received response: {response}")
-                        return response
-                    time.sleep(0.1)
-                except Exception as e:
-                    logger.error(f"Error while waiting for response: {str(e)}", exc_info=True)
-                    raise
-            
-            logger.warning(f"Timeout reached waiting for {event_type} response")
-            return None
-            
+            if channel and channel.is_open:
+                channel.close()
+            if connection and not connection.is_closed:
+                connection.close()
         except Exception as e:
-            logger.error(f"Error processing {event_type}: {str(e)}", exc_info=True)
-            raise
-        finally:
-            try:
-                if channel and channel.is_open:
-                    channel.close()
-                if connection and not connection.is_closed:
-                    connection.close()
-            except Exception as e:
-                logger.error(f"Error closing connections: {str(e)}", exc_info=True)
-
-    def process_invoice(self, invoice_data: Dict[str, Any], timeout: int = 30) -> Optional[dict]:
-        """
-        Convenience method for processing invoices
-        """
-        try:
-            # Convert invoice data to string if it's not already
-            if not isinstance(invoice_data, str):
-                invoice_data = json.dumps(invoice_data)
-            
-            logger.debug(f"Processing invoice data: {invoice_data}")
-            return self.process_text(
-                text=invoice_data,
-                event_type='invoice',
-                timeout=timeout
-            )
-        except Exception as e:
-            logger.error(f"Error in process_invoice: {str(e)}", exc_info=True)
-            raise
+            logger.error(f"Error closing connections: {str(e)}", exc_info=True)
