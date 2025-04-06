@@ -192,7 +192,41 @@ class Crawler:
                 "url": current_url,
                 "error": str(e)
             })
-    # Extract content using basic HTML parsing.
+        finally:
+            # Ensure semaphore is released
+            if hasattr(self, 'semaphore'):
+                try:
+                    self.semaphore.release()
+                except ValueError:
+                    pass  # Semaphore was already released
+
+    def clean_text(self, text: str) -> str:
+        """Clean and normalize text content."""
+        if not text:
+            return ""
+        
+        # Replace multiple spaces, tabs, and newlines with a single space
+        text = ' '.join(text.split())
+        
+        # Fix common spacing issues
+        text = text.replace(' ,', ',')
+        text = text.replace(' .', '.')
+        text = text.replace(' :', ':')
+        text = text.replace(' ;', ';')
+        text = text.replace('( ', '(')
+        text = text.replace(' )', ')')
+        
+        # Ensure proper spacing after punctuation
+        text = text.replace(',', ', ')
+        text = text.replace('.', '. ')
+        text = text.replace(':', ': ')
+        text = text.replace(';', '; ')
+        
+        # Clean up any double spaces that might have been created
+        text = ' '.join(text.split())
+        
+        return text.strip()
+
     async def extract_content_basic(self, soup: BeautifulSoup, url: str) -> Dict:
         """Extract content using basic HTML parsing."""
         # Remove unwanted elements
@@ -244,7 +278,7 @@ class Crawler:
 
             # Skip elements with unwanted text
             skip_texts = {'====== Navbar Section', '====== Hero Section'}
-            text = element.get_text(strip=True)
+            text = self.clean_text(element.get_text())
             if any(skip_text in text for skip_text in skip_texts):
                 return
 
@@ -287,20 +321,37 @@ class Crawler:
                 
                 elif element.name in ['ul', 'ol']:
                     list_items = []
-                    for li in element.find_all('li', recursive=False):
-                        li_text = li.get_text(strip=True)
+                    # Find all li elements, including those nested in spans
+                    for li in element.find_all('li', class_='mshfa-features__item-li'):  # Add class filter
+                        li_text = self.clean_text(li.get_text())
                         if li_text and li_text not in seen_content:
                             list_items.append(li_text)
                             seen_content.add(li_text)
+                    
+                    # If no items found with class, try without class filter
+                    if not list_items:
+                        for li in element.find_all('li'):
+                            li_text = self.clean_text(li.get_text())
+                            if li_text and li_text not in seen_content:
+                                list_items.append(li_text)
+                                seen_content.add(li_text)
+                    
                     if list_items:
+                        # Also capture the list title if present
+                        list_title = None
+                        title_elem = element.find_previous_sibling('p', class_='mshfa-features__item-title')
+                        if title_elem:
+                            list_title = self.clean_text(title_elem.get_text())
+                        
                         structured_content.append({
                             'type': 'list',
+                            'title': list_title,  # Add title to the list structure
                             'items': list_items,
                             'tag': element.name
                         })
 
             # Process children only for container elements
-            if element.name in ['div', 'section', 'article', 'main', 'body']:
+            if element.name in ['div', 'section', 'article', 'main', 'body', 'span']:  # Added 'span'
                 for child in element.children:
                     process_element(child)
 
@@ -332,6 +383,8 @@ class Crawler:
             elif item['type'] == 'paragraph':
                 full_text_parts.append(f"[P_START]\n{item['content']}\n[P_END]")
             elif item['type'] == 'list':
+                if item.get('title'):
+                    full_text_parts.append(f"[P_START]\n{item['title']}\n[P_END]")
                 list_text = "\n".join(f"• {list_item}" for list_item in item['items'])
                 full_text_parts.append(f"[LIST_START]\n{list_text}\n[LIST_END]")
         
