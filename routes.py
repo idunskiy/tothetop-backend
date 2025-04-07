@@ -520,6 +520,39 @@ def get_website_improvements(website_id: int, db: Session = Depends(get_db)):
     improvements = db.query(PageImprovement).filter(PageImprovement.website_id == website_id).all()
     return improvements 
 
+@router.get("/analysis/last-batch")
+def get_last_batch(
+    website_id: int = Query(..., description="Website ID"),
+    user_id: int = Query(..., description="User ID"),
+    db: Session = Depends(get_db)
+):
+    """Get the most recent batch_id for a given website and user."""
+    try:
+        # Query the most recent batch_id from GSCKeywordData
+        last_batch = db.query(GSCKeywordData.batch_id)\
+            .filter(GSCKeywordData.website_id == website_id)\
+            .order_by(GSCKeywordData.created_at.desc())\
+            .first()
+        
+        logger.info(f"Last batch from gsc-results: {last_batch}")
+
+        if not last_batch:
+            # If no batch found in GSCKeywordData, try CrawlerResult
+            last_batch = db.query(CrawlerResult.batch_id)\
+                .filter(CrawlerResult.batch_id.isnot(None))\
+                .order_by(CrawlerResult.created_at.desc())\
+                .first()
+
+            logger.info(f"No last batch found in gsc-results, trying crawler-results")
+            
+        if last_batch:
+            return {"batch_id": last_batch[0]}
+        else:
+            return {"batch_id": None}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/analysis/{batch_id}")
 async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
     # Get GSC data for this batch
