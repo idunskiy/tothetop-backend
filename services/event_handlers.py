@@ -68,3 +68,33 @@ class IntentProcessor(BaseProcessor):
                 'result': 'error',
                 'error': str(e)
             }
+
+class AddKeywordsProcessor(BaseProcessor):
+    def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            # Parse the optimization data
+            logger.debug(f"Initial data: {data}")
+            optimization_data = json.loads(data.get('text', '{}'))
+            logger.debug(f"Processing add keywords data: {optimization_data}")
+            
+            # Just format the data for the AI service
+            formatted_data = {
+                'original_content': optimization_data.get('original_content'),
+                'keywords': optimization_data.get('keywords', [])
+            }
+            
+            logger.debug(f"Formatted data for AI service: {formatted_data}")
+            
+            # Return the formatted data - this will be sent through RabbitMQ
+            return {
+                'type': 'add_keywords',  # This tells the AI service which event type to use
+                'text': json.dumps(formatted_data),
+                'request_id': data.get('request_id')
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing add keywords request: {str(e)}")
+            return {
+                'result': 'error',
+                'error': str(e)
+            }

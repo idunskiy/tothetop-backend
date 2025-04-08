@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -88,6 +88,7 @@ class CrawlStatus(BaseModel):
     pages: Optional[List[PageData]] = None
     
 crawl_sessions = {}
+ai_service = AIService()
 
 # Crawl a website and extract SEO-relevant content from each page.
 # @router.post("/crawl", response_model=CrawlResponse)
@@ -594,9 +595,8 @@ async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
         # Check if keyword exists in content
         if keyword.page_url in page_content:
             content = page_content[keyword.page_url]
-            combined_content = f"{content['title']} {content['meta_description']} {content['body_text']}".lower()
             
-            if keyword.keyword.lower() in combined_content:
+            if keyword.keyword.lower() in content['full_text'].lower():
                 page_analysis[keyword.page_url]['present_keywords'].append({
                     'keyword': keyword.keyword,
                     'impressions': keyword.impressions,
@@ -676,4 +676,76 @@ async def process_intent(request: IntentRequest):
     except Exception as e:
         logger.error(f"Error processing intent: {str(e)}")  # Log the specific error
         logger.exception("Full traceback:")  # This will log the full traceback
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/add-keywords")
+async def add_keywords(
+    request_data: dict = Body(
+        ...,  # ... means required
+        example={
+            "url": "https://example.com/blog-post",
+            "batch_id": "batch_123"
+        }
+    ),
+    db: Session = Depends(get_db)
+):
+    try:
+        url = request_data.get("url")
+        batch_id = request_data.get("batch_id")
+        
+        if not url or not batch_id:
+            raise HTTPException(status_code=400, detail="URL and batch_id are required")
+
+        # Get the crawler result with the content
+        content = db.query(CrawlerResult).filter(
+            CrawlerResult.page_url == url,
+            CrawlerResult.batch_id == batch_id
+        ).first()
+        
+        if not content:
+            raise HTTPException(status_code=404, detail="Content not found")
+
+        # Get top 20 keywords for this URL, sorted by impressions
+        keywords = db.query(GSCKeywordData).filter(
+            GSCKeywordData.page_url == url,
+            GSCKeywordData.batch_id == batch_id
+        ).order_by(
+            GSCKeywordData.impressions.desc()
+        ).limit(20).all()
+        
+        if not keywords:
+            raise HTTPException(status_code=404, detail="No keywords found for this URL")
+
+        # Filter out keywords that are already present in the content
+        missing_keywords = [
+            {
+                "keyword": kw.keyword,
+                "impressions": kw.impressions,
+                "position": kw.average_position
+            }
+            for kw in keywords
+            if kw.keyword.lower() not in content.full_text.lower()
+        ]
+        
+        logger.debug(f"Missing keywords: {missing_keywords}")
+
+        if not missing_keywords:
+            missing_keywords = []
+
+        # Prepare the data to send to AI service
+        optimization_data = {
+            "original_content": content.full_text,
+            "keywords": missing_keywords
+        }
+        
+        print(f"Optimization data: {optimization_data}")
+        
+        # Send to AI service
+        
+        response = ai_service.add_keywords(optimization_data)
+        print(f"Received from AI service: {response}")  # Add this line
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in optimize_content: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
