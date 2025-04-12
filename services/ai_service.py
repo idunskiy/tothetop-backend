@@ -6,7 +6,7 @@ import sys
 from typing import Optional, Dict, Any, Protocol, Type
 import time
 from abc import ABC, abstractmethod
-from services.event_handlers import TextAnalysisProcessor, InvoiceProcessor, IntentProcessor, AddKeywordsProcessor
+from services.event_handlers import TextAnalysisProcessor, InvoiceProcessor, IntentProcessor, AddKeywordsProcessor, OptimizeSectionProcessor
 
 # Set up logging properly
 logging.basicConfig(
@@ -40,14 +40,15 @@ class AIService:
             self.register_processor('invoice', InvoiceProcessor)
             self.register_processor('intent', IntentProcessor)
             self.register_processor('add_keywords', AddKeywordsProcessor)
-            
+            self.register_processor('optimize_section', OptimizeSectionProcessor)
             # Queue configuration
             self.queues = {
                 'text_analysis': 'text_analysis_queue',
                 'invoice': 'invoice_queue',
                 'responses': 'response_queue',
                 'intent': 'intent_queue',
-                'add_keywords': 'add_keywords_queue'
+                'add_keywords': 'add_keywords_queue',
+                'optimize_section': 'optimize_section_queue',
             }
             
             # Set up persistent connection and consumer for responses
@@ -173,6 +174,10 @@ class AIService:
     def add_keywords(self, optimization_data: Dict[str, Any], timeout: int = 120) -> Optional[dict]:
         """Optimize content"""
         return self.process_event('add_keywords', optimization_data, timeout)
+    
+    def optimize_section(self, optimization_data: Dict[str, Any], timeout: int = 120) -> Optional[dict]:
+        """Optimize content"""
+        return self.process_event('optimize_section', optimization_data, timeout)
 
     def _setup_response_consumer(self):
         """Set up a persistent connection to consume responses"""

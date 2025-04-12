@@ -98,3 +98,33 @@ class AddKeywordsProcessor(BaseProcessor):
                 'result': 'error',
                 'error': str(e)
             }
+            
+class OptimizeSectionProcessor(BaseProcessor):
+    def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            # Parse the optimization data
+            logger.debug(f"Initial data in OptimizeSectionProcessor: {data}")
+            optimization_data = json.loads(data.get('text', '{}'))
+            logger.debug(f"Processing optimize section data in OptimizeSectionProcessor: {optimization_data}")
+            
+            # Just format the data for the AI service
+            formatted_data = {
+                'full_text': optimization_data.get('full_text'),
+                'selected_text': optimization_data.get('selected_text'),
+                'prompt': optimization_data.get('prompt')
+            }
+            
+            logger.debug(f"Formatted data for AI service in OptimizeSectionProcessor: {formatted_data}")
+            
+            # Return the formatted data - this will be sent through RabbitMQ
+            return {
+                'type': 'optimize_section',  # This tells the AI service which event type to use
+                'text': json.dumps(formatted_data),
+                'request_id': data.get('request_id')
+            }
+        except Exception as e:
+            logger.error(f"Error processing optimize section request: {str(e)}")
+            return {
+                'result': 'error',
+                'error': str(e)
+            }

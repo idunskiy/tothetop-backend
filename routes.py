@@ -749,9 +749,7 @@ async def add_keywords(
     db: Session = Depends(get_db)
 ):
     try:
-        timestr = time.strftime("%Y%m%d-%H%M%S")
-        logger.info(f"Received request to add keywords at {timestr}")
-        print(f"Received request to add keywords at {timestr}")
+        
         
         url = request_data.get("url")
         batch_id = request_data.get("batch_id")
@@ -801,10 +799,7 @@ async def add_keywords(
             "keywords": missing_keywords
         }
         
-        print(f"Optimization data: {optimization_data}")
-        
         # Send to AI service
-        
         response = ai_service.add_keywords(optimization_data)
         print(f"Received from AI service: {response}")  # Add this line
         return response
@@ -812,3 +807,65 @@ async def add_keywords(
     except Exception as e:
         logger.error(f"Error in optimize_content: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.post("/optimize-section")
+async def optimize_section(
+    request_data: dict = Body(
+        ...,
+        example={
+            "full_text": "Complete article content with block markers",
+            "selected_text": "Text portion to optimize",
+            "prompt": "User's optimization instructions"
+        }
+    ),
+    db: Session = Depends(get_db)
+):
+    try:
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        logger.info(f"Received request to optimize section at {timestr}")
+        print(f"Received request to optimize section at {timestr}")
+
+        # Validate input
+        full_text = request_data.get("full_text")
+        selected_text = request_data.get("selected_text")
+        prompt = request_data.get("prompt")
+
+        if not all([full_text, selected_text, prompt]):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing required fields: full_text, selected_text, or prompt"
+            )
+
+        # Prepare the prompt data
+        prompt_data = {
+            "full_text": full_text,
+            "selected_text": selected_text,
+            "prompt": prompt
+        }
+
+        # Get optimization from AI service
+        try:
+            response = ai_service.optimize_section(prompt_data)
+            print(f"Received from AI on optimize section: {response}")  # Add this line
+            # Validate AI response structure
+            if not isinstance(response, dict) or 'message' not in response:
+                raise ValueError("Invalid AI response structure")
+
+            return response
+
+        except Exception as e:
+            logger.error(f"AI service error: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to optimize content"
+            )
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Unexpected error in optimize_section: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
