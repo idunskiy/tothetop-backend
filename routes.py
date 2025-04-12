@@ -26,7 +26,8 @@ from fastapi.responses import JSONResponse
 from services.ai_service import AIService
 import logging
 from schemas import IntentRequest
-
+import os
+import time
 router = APIRouter()
 
 
@@ -41,6 +42,22 @@ def get_db():
         yield db
     finally:
         db.close()
+        
+        
+# Create a logger
+logger = logging.getLogger('AddKeywordsLogger')
+logger.setLevel(logging.INFO)  # Set the log level
+
+# Create a file handler
+log_file_path = os.path.join(os.path.dirname(__file__), 'add_keywords.log')
+file_handler = logging.FileHandler(log_file_path)
+
+# Create a logging format
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+
+# Add the file handler to the logger
+logger.addHandler(file_handler)
         
 
 class CrawlRequest(BaseModel):
@@ -553,6 +570,48 @@ def get_last_batch(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/user/last-batch")
+def get_user_last_batch(
+    email: str = Query(..., description="User email"),
+    db: Session = Depends(get_db)
+):
+    """Get the most recent batch_id for a given user email."""
+    try:
+        # First get the user_id from the email
+        user = db.query(User).filter(User.email == email).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Query the most recent batch_id from GSCKeywordData
+        last_batch = db.query(GSCKeywordData.batch_id)\
+            .join(Website, GSCKeywordData.website_id == Website.id)\
+            .filter(Website.user_id == user.id)\
+            .order_by(GSCKeywordData.created_at.desc())\
+            .first()
+        
+        logger.info(f"Last batch from gsc-results: {last_batch}")
+
+        if not last_batch:
+            # If no batch found in GSCKeywordData, try CrawlerResult
+            last_batch = db.query(CrawlerResult.batch_id)\
+                .join(Website, CrawlerResult.website_id == Website.id)\
+                .filter(Website.user_id == user.id)\
+                .filter(CrawlerResult.batch_id.isnot(None))\
+                .order_by(CrawlerResult.created_at.desc())\
+                .first()
+
+            logger.info(f"No last batch found in gsc-results, trying crawler-results")
+            
+        if last_batch:
+            return {"batch_id": last_batch[0]}
+        else:
+            return {"batch_id": None}
+
+    except Exception as e:
+        logger.error(f"Error in get_last_batch: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/analysis/{batch_id}")
 async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
@@ -690,6 +749,10 @@ async def add_keywords(
     db: Session = Depends(get_db)
 ):
     try:
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        logger.info(f"Received request to add keywords at {timestr}")
+        print(f"Received request to add keywords at {timestr}")
+        
         url = request_data.get("url")
         batch_id = request_data.get("batch_id")
         
