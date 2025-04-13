@@ -6,15 +6,14 @@ from datetime import datetime, date
 import uuid
 
 from database import SessionLocal
-from models import User, Website, GSCPageData, GSCKeywordData, CrawlerResult, AnalysisResult, PageImprovement
+from models import User, Website, GSCPageData, GSCKeywordData, CrawlerResult,  PageOptimization
 from schemas import (
     UserCreate, User as UserSchema,
     WebsiteCreate, Website as WebsiteSchema,
     GSCPageDataCreate, GSCPageData as GSCPageDataSchema,
     GSCKeywordDataCreate, GSCKeywordData as GSCKeywordDataSchema,
     CrawlerResultCreate, CrawlerResult as CrawlerResultSchema,
-    AnalysisResultCreate, AnalysisResult as AnalysisResultSchema,
-    PageImprovementCreate, PageImprovement as PageImprovementSchema
+    OptimizationCreate, OptimizationResponse, LatestOptimization, OptimizedPage, OptimizationsResponse
 )
 from crawler import Crawler
 from fastapi import HTTPException
@@ -28,6 +27,7 @@ import logging
 from schemas import IntentRequest
 import os
 import time
+
 router = APIRouter()
 
 
@@ -510,33 +510,6 @@ def get_website_crawler_results(website_id: int, db: Session = Depends(get_db)):
     results = db.query(CrawlerResult).filter(CrawlerResult.website_id == website_id).all()
     return results
 
-# Analysis Result endpoints
-@router.post("/analysis/results/", response_model=AnalysisResultSchema)
-def create_analysis_result(result: AnalysisResultCreate, db: Session = Depends(get_db)):
-    db_result = AnalysisResult(**result.dict())
-    db.add(db_result)
-    db.commit()
-    db.refresh(db_result)
-    return db_result
-
-@router.get("/analysis/results/{website_id}", response_model=List[AnalysisResultSchema])
-def get_website_analysis_results(website_id: int, db: Session = Depends(get_db)):
-    results = db.query(AnalysisResult).filter(AnalysisResult.website_id == website_id).all()
-    return results
-
-# Page Improvement endpoints
-@router.post("/improvements/", response_model=PageImprovementSchema)
-def create_page_improvement(improvement: PageImprovementCreate, db: Session = Depends(get_db)):
-    db_improvement = PageImprovement(**improvement.dict())
-    db.add(db_improvement)
-    db.commit()
-    db.refresh(db_improvement)
-    return db_improvement
-
-@router.get("/improvements/{website_id}", response_model=List[PageImprovementSchema])
-def get_website_improvements(website_id: int, db: Session = Depends(get_db)):
-    improvements = db.query(PageImprovement).filter(PageImprovement.website_id == website_id).all()
-    return improvements 
 
 @router.get("/analysis/last-batch")
 def get_last_batch(
@@ -869,3 +842,86 @@ async def optimize_section(
             status_code=500,
             detail="Internal server error"
         )
+        
+# Page Optimizations
+
+# Add these routes with your other routes
+@router.post("/add-optimization", response_model=OptimizationResponse)
+async def save_optimization(
+    optimization: OptimizationCreate,
+    db: Session = Depends(get_db)
+):
+    try:
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        logger.info(f"Received request to add optimization with data: {optimization}")
+        print(f"Received request to add optimization with data: {optimization}")
+        user = db.query(User).filter(User.email == optimization.email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        new_optimization = PageOptimization(
+            user_id=user.id,
+            url=optimization.url,
+            optimization_type=optimization.optimization_type,
+            summary=optimization.summary,
+            reasoning=optimization.reasoning,
+            original_content=optimization.original_content,
+            modified_content=optimization.modified_content
+        )
+        
+        db.add(new_optimization)
+        db.commit()
+        
+        return {
+            "id": new_optimization.id,
+            "message": "Optimization saved successfully"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.get("/get-optimizations", response_model=OptimizationsResponse)
+async def get_optimizations(
+    email: str = Query(..., description="User email"),
+    db: Session = Depends(get_db)
+):
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get latest optimization for each URL
+        optimizations = db.query(
+            PageOptimization.url,
+            func.max(PageOptimization.created_at).label('latest_timestamp'),
+            func.count('*').label('optimization_count')
+        ).filter(
+            PageOptimization.user_id == user.id
+        ).group_by(
+            PageOptimization.url
+        ).all()
+
+        pages = []
+        for opt in optimizations:
+            latest = db.query(PageOptimization).filter(
+                PageOptimization.user_id == user.id,
+                PageOptimization.url == opt.url,
+                PageOptimization.created_at == opt.latest_timestamp
+            ).first()
+
+            pages.append({
+                'url': opt.url,
+                'latest_optimization': {
+                    'timestamp': latest.created_at.isoformat(),
+                    'summary': latest.summary,
+                    'type': latest.optimization_type
+                },
+                'optimization_count': opt.optimization_count
+            })
+
+        return {"pages": pages}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

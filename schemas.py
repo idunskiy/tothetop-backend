@@ -109,45 +109,6 @@ class CrawlerResult(CrawlerResultBase):
     class Config:
         from_attributes = True
 
-# Analysis Result schemas
-class AnalysisResultBase(BaseModel):
-    overall_score: int
-    metrics: Dict[str, Any]
-
-class AnalysisResultCreate(AnalysisResultBase):
-    user_id: int
-    website_id: int
-
-class AnalysisResult(AnalysisResultBase):
-    id: int
-    user_id: int
-    website_id: int
-    analyzed_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# Page Improvement schemas
-class PageImprovementBase(BaseModel):
-    page_url: str
-    improvement_type: str
-    priority: str
-    description: str
-    status: str = 'pending'
-
-class PageImprovementCreate(PageImprovementBase):
-    user_id: int
-    website_id: int
-
-class PageImprovement(PageImprovementBase):
-    id: int
-    user_id: int
-    website_id: int
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True 
 
 class IntentRequest(BaseModel):
     full_text: str
@@ -155,3 +116,30 @@ class IntentRequest(BaseModel):
     title: Optional[str] = None
     meta_description: Optional[str] = None
     target_keywords: Optional[List[str]] = None
+
+# Add these Pydantic models at the top with your other models
+class OptimizationCreate(BaseModel):
+    email: str
+    url: str
+    optimization_type: str
+    summary: str
+    reasoning: str
+    original_content: str
+    modified_content: str
+
+class OptimizationResponse(BaseModel):
+    id: int
+    message: str
+
+class LatestOptimization(BaseModel):
+    timestamp: str
+    summary: str
+    type: str
+
+class OptimizedPage(BaseModel):
+    url: str
+    latest_optimization: LatestOptimization
+    optimization_count: int
+
+class OptimizationsResponse(BaseModel):
+    pages: List[OptimizedPage]

@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Date, ForeignKey, Text, ARRAY, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Date, ForeignKey, Text, ARRAY, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from datetime import datetime
+from sqlalchemy.orm import relationship
+
 
 Base = declarative_base()
 
@@ -87,49 +89,25 @@ class CrawlerResult(Base):
     status = Column(String(50))
     batch_id = Column(String(255), nullable=False)
 
-class AnalysisResult(Base):
-    __tablename__ = 'analysis_results'
+    
+class PageOptimization(Base):
+    __tablename__ = 'page_optimizations'
     
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'))
-    website_id = Column(Integer, ForeignKey('websites.id'))
-    overall_score = Column(Integer)
-    metrics = Column(JSONB)
-    analyzed_at = Column(DateTime, default=func.now())
-
-class PageImprovement(Base):
-    __tablename__ = 'page_improvements'
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    website_id = Column(Integer, ForeignKey('websites.id'))
-    page_url = Column(Text, nullable=False)
-    improvement_type = Column(String(50))
-    priority = Column(String(20))
-    description = Column(Text)
-    status = Column(String(20), default='pending')
+    url = Column(Text, nullable=False)
+    optimization_type = Column(String(10), nullable=False)  # 'keyword' or 'section'
+    summary = Column(Text, nullable=False)
+    reasoning = Column(Text, nullable=False)
+    original_content = Column(Text, nullable=False)
+    modified_content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-class CrawlSession(Base):
-    __tablename__ = 'crawl_sessions'
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    website_id = Column(Integer, ForeignKey('websites.id'))
-    started_at = Column(DateTime)
-    completed_at = Column(DateTime)
-    pages_found = Column(Integer)
-    pages_crawled = Column(Integer)
-    status = Column(String(50))
+    # Add indexes for better query performance
+    __table_args__ = (
+        Index('idx_page_optimizations_user_url', 'user_id', 'url'),
+        Index('idx_page_optimizations_created_at', 'created_at'),
+    )
 
-class WebsiteSetting(Base):
-    __tablename__ = 'website_settings'
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    website_id = Column(Integer, ForeignKey('websites.id'))
-    crawl_frequency = Column(String(50))
-    excluded_paths = Column(ARRAY(Text))
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    # Relationship to User model
+    user = relationship('User', backref='page_optimizations')
