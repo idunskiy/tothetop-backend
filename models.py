@@ -96,7 +96,7 @@ class PageOptimization(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'))
     url = Column(Text, nullable=False)
-    optimization_type = Column(String(10), nullable=False)  # 'keyword' or 'section'
+    optimization_type = Column(Text, nullable=False)  # 'keyword' or 'section'
     summary = Column(Text, nullable=False)
     reasoning = Column(Text, nullable=False)
     original_content = Column(Text, nullable=False)

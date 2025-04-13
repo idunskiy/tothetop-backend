@@ -13,7 +13,7 @@ from schemas import (
     GSCPageDataCreate, GSCPageData as GSCPageDataSchema,
     GSCKeywordDataCreate, GSCKeywordData as GSCKeywordDataSchema,
     CrawlerResultCreate, CrawlerResult as CrawlerResultSchema,
-    OptimizationCreate, OptimizationResponse, LatestOptimization, OptimizedPage, OptimizationsResponse
+    OptimizationCreate, OptimizationResponse, LatestOptimization, OptimizedPage, OptimizationsList, OptimizationDetail
 )
 from crawler import Crawler
 from fastapi import HTTPException
@@ -175,6 +175,19 @@ ai_service = AIService()
 #     except Exception as e:
 #         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/user/email/{db_user_id}")
+def get_user_email(db_user_id: int, db: Session = Depends(get_db)):
+    """Get user's email by their database ID."""
+    try:
+        user = db.query(User).filter(User.id == db_user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        print(f"User email using db_user_id: {user.email}")
+        return {"email": user.email}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    
 @router.post("/crawl", response_model=CrawlResponse)
 async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
     try:
@@ -852,7 +865,6 @@ async def save_optimization(
     db: Session = Depends(get_db)
 ):
     try:
-        timestr = time.strftime("%Y%m%d-%H%M%S")
         logger.info(f"Received request to add optimization with data: {optimization}")
         print(f"Received request to add optimization with data: {optimization}")
         user = db.query(User).filter(User.email == optimization.email).first()
@@ -879,10 +891,12 @@ async def save_optimization(
         
     except Exception as e:
         db.rollback()
+        logger.error(f"Error in save_optimization: {str(e)}")
+        print(f"Error in save_optimization: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
 
-@router.get("/get-optimizations", response_model=OptimizationsResponse)
+@router.get("/optimized-pages", response_model=OptimizationsList)
 async def get_optimizations(
     email: str = Query(..., description="User email"),
     db: Session = Depends(get_db)
@@ -892,36 +906,65 @@ async def get_optimizations(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Get latest optimization for each URL
+        # Get all optimizations ordered by created_at
         optimizations = db.query(
+            PageOptimization.id,
             PageOptimization.url,
-            func.max(PageOptimization.created_at).label('latest_timestamp'),
-            func.count('*').label('optimization_count')
+            PageOptimization.summary,
+            PageOptimization.reasoning,
+            PageOptimization.created_at,
+            PageOptimization.optimization_type,
+            PageOptimization.modified_content
         ).filter(
             PageOptimization.user_id == user.id
-        ).group_by(
-            PageOptimization.url
+        ).order_by(
+            PageOptimization.created_at.desc()
         ).all()
 
-        pages = []
-        for opt in optimizations:
-            latest = db.query(PageOptimization).filter(
-                PageOptimization.user_id == user.id,
-                PageOptimization.url == opt.url,
-                PageOptimization.created_at == opt.latest_timestamp
-            ).first()
-
-            pages.append({
-                'url': opt.url,
-                'latest_optimization': {
-                    'timestamp': latest.created_at.isoformat(),
-                    'summary': latest.summary,
-                    'type': latest.optimization_type
-                },
-                'optimization_count': opt.optimization_count
-            })
-
+        pages = [{
+            'id': opt.id,
+            'url': opt.url,
+            'summary': opt.summary,
+            'created_at': opt.created_at.isoformat(),
+            'reasoning': opt.reasoning,
+            'optimization_type': opt.optimization_type,
+            'modified_content': opt.modified_content
+        } for opt in optimizations]
+        
+        print(f"Optimized pages for user {email}: {pages}")
+        
         return {"pages": pages}
 
     except Exception as e:
+        logger.error(f"Error in get_optimizations: {str(e)}")
+        print(f"Error in get_optimizations: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.get("/optimized-pages/{optimization_id}", response_model=OptimizationDetail)
+async def get_optimization_detail(
+    optimization_id: int,
+    db: Session = Depends(get_db)
+):
+    try:
+        optimization = db.query(PageOptimization).filter(
+            PageOptimization.id == optimization_id
+        ).first()
+
+        if not optimization:
+            raise HTTPException(status_code=404, detail="Optimization not found")
+
+        return {
+            "id": optimization.id,
+            "url": optimization.url,
+            "optimization_type": optimization.optimization_type,
+            "summary": optimization.summary,
+            "reasoning": optimization.reasoning,
+            "original_content": optimization.original_content,
+            "modified_content": optimization.modified_content,
+            "created_at": optimization.created_at.isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error in get_optimization_detail: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) 

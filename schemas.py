@@ -140,6 +140,16 @@ class OptimizedPage(BaseModel):
     url: str
     latest_optimization: LatestOptimization
     optimization_count: int
+    
+class OptimizationDetail(BaseModel):
+    id: int
+    url: str
+    optimization_type: str
+    summary: str
+    reasoning: str
+    modified_content: str
+    created_at: str
 
-class OptimizationsResponse(BaseModel):
-    pages: List[OptimizedPage]
+class OptimizationsList(BaseModel):
+    pages: List[OptimizationDetail]
+    
