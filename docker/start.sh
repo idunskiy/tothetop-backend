@@ -1,6 +1,9 @@
 #!/bin/bash
 
-source ./.env
+# Change to parent directory first
+cd "$(dirname "$0")/.." || exit
+
+source .env
 
 docker_network="tothetop_network"
 
