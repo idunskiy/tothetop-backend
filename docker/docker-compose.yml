@@ -24,8 +24,6 @@ services:
       - "8000:8000"
     networks:
       - tothetop_network
-    depends_on:
-      - tothetop_rabbitmq  # Add dependency
 
 networks:
   tothetop_network:
