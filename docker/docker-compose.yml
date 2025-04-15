@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   backend:
-    build: .
+    build: 
+      context: ..  # Go up one level since Dockerfile needs access to all files
+      dockerfile: docker/Dockerfile
     container_name: tothetop_backend
     restart: always
     environment:
@@ -11,10 +13,19 @@ services:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
       - DB_NAME=${DB_NAME}
+      - PROJECT_NAME=${PROJECT_NAME:-backend}  # Add project name env var
+      - RABBITMQ_HOST=tothetop_rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+    volumes:
+      - ..:/app  # Mount the code for development
     ports:
       - "8000:8000"
     networks:
       - tothetop_network
+    depends_on:
+      - tothetop_rabbitmq  # Add dependency
 
 networks:
   tothetop_network:
