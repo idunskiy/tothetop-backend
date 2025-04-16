@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any, Protocol, Type
 import time
 from abc import ABC, abstractmethod
 from services.event_handlers import TextAnalysisProcessor, InvoiceProcessor, IntentProcessor, AddKeywordsProcessor, OptimizeSectionProcessor
-
+from config import settings
 # Set up logging properly
 logging.basicConfig(
     level=logging.DEBUG,
@@ -51,6 +51,16 @@ class AIService:
                 'optimize_section': 'optimize_section_queue',
             }
             
+            # RabbitMQ connection parameters
+            self.connection_params = pika.ConnectionParameters(
+                host=settings.rabbitmq_host,
+                port=int(settings.rabbitmq_port),
+                credentials=pika.PlainCredentials(
+                    settings.rabbitmq_user,
+                    settings.rabbitmq_password
+                )
+            )
+            
             # Set up persistent connection and consumer for responses
             self._setup_response_consumer()
             self.initialized = True
@@ -91,7 +101,7 @@ class AIService:
             logger.info(f"Processing {event_type} request")
             
             # Create fresh connection and set up consumer first
-            connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+            connection = pika.BlockingConnection(self.connection_params)
             channel = connection.channel()
             
             # Declare all queues
@@ -182,7 +192,7 @@ class AIService:
     def _setup_response_consumer(self):
         """Set up a persistent connection to consume responses"""
         self.response_connection = pika.BlockingConnection(
-            pika.ConnectionParameters('localhost')
+            self.connection_params
         )
         self.response_channel = self.response_connection.channel()
         
