@@ -11,7 +11,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://195.201.32.246", "https://tothetop.ai"],  # Your frontend URL
+    allow_origins=["http://localhost:3000", "https://195.201.32.246", "https://tothetop.ai", "https://tothetop.cloud"],  # Your frontend URL
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
