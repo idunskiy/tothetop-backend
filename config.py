@@ -8,11 +8,18 @@ class Settings(BaseSettings):
     db_port: str
     db_name: str
     
+    # RabbitMQ settings
+    project_name: str
+    rabbitmq_host: str
+    rabbitmq_port: str
+    rabbitmq_user: str
+    rabbitmq_password: str
+    
     # Crawler settings
     MAX_WORKERS: int = 5
     TIMEOUT: int = 10
     MAX_RETRIES: int = 3
-    USER_AGENT: str = "TothetopBot/1.0 (+https://tothetop.ai)"
+    USER_AGENT: str = "TothetopBot/1.0 (+https://tothetop.cloud)"
     
     # Content quality thresholds
     MIN_WORD_COUNT: int = 100
