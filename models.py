@@ -88,6 +88,7 @@ class CrawlerResult(Base):
     crawled_at = Column(DateTime, default=func.now())
     status = Column(String(50))
     batch_id = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     
 class PageOptimization(Base):
