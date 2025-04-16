@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+import logging
+# Add debug logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     db_user: str
@@ -32,5 +36,12 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        case_sensitive = False
+        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Add debug logging
+        logger.debug(f"RabbitMQ settings: host={self.rabbitmq_host}, port={self.rabbitmq_port}")
+        logger.debug(f"Project name: {self.project_name}")
 
 settings = Settings() 
