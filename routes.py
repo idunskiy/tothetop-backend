@@ -199,6 +199,7 @@ def get_user_email(db_user_id: int, db: Session = Depends(get_db)):
 async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
     try:
         session_id = str(uuid.uuid4())
+        logger.info(f"Starting crawl for session {session_id}")
         
         # Initialize the session first
         crawl_sessions[session_id] = {
@@ -210,6 +211,7 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
         }
         
         # Create and start the crawler
+        logger.info(f"Creating crawler for {request.base_url} with batch_id {request.batch_id}")
         crawler = Crawler(str(request.base_url), request.batch_id)
         
         def update_progress(total_pages, crawled_pages, current_url):
@@ -228,6 +230,8 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
             "pages": [],
             "statistics": {}
         }
+        
+        logger.info(f"Initial response: {initial_response}")
 
         # Start crawling in a separate task
         asyncio.create_task(
@@ -482,12 +486,6 @@ def get_website_page_data(website_id: int, db: Session = Depends(get_db)):
 # GSC Keyword Data endpoints
 @router.post("/gsc/keyword-data/", response_model=GSCKeywordDataSchema)
 def create_gsc_keyword_data(data: GSCKeywordDataCreate, db: Session = Depends(get_db)):
-    print("Keyword Incoming data:", data.dict())
-    print("Keyword:", data.keyword)
-    print("Keyword Page URL:", data.page_url)
-    print("Keyword Date:", data.date)
-    print("Keyword Website ID:", data.website_id)
-    print("Keyword Batch ID:", data.batch_id)
     
     existing = db.query(GSCKeywordData).filter(
         GSCKeywordData.keyword == data.keyword,
