@@ -453,11 +453,6 @@ def get_user_websites(user_id: int, db: Session = Depends(get_db)):
 def create_gsc_page_data(data: GSCPageDataCreate, db: Session = Depends(get_db)):
     
     # Debug prints
-    print("Page Incoming data:", data.dict())
-    print("Page URL:", data.page_url)
-    print("Page Date:", data.date)
-    print("Page Website ID:", data.website_id)
-    print("Page Batch ID:", data.batch_id)
     existing = db.query(GSCPageData).filter(
         GSCPageData.page_url == data.page_url,
         GSCPageData.date == data.date,
