@@ -51,23 +51,6 @@ def get_db():
     finally:
         db.close()
         
-        
-# Create a logger
-logger = logging.getLogger('AddKeywordsLogger')
-logger.setLevel(logging.INFO)  # Set the log level
-
-# Create a file handler
-log_file_path = os.path.join(os.path.dirname(__file__), 'add_keywords.log')
-file_handler = logging.FileHandler(log_file_path)
-
-# Create a logging format
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-
-# Add the file handler to the logger
-logger.addHandler(file_handler)
-        
-
 class CrawlRequest(BaseModel):
     base_url: HttpUrl
     batch_id: str
