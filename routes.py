@@ -383,18 +383,23 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 @router.post("/websites/", response_model=WebsiteSchema)
 def create_website(website: WebsiteCreate, db: Session = Depends(get_db)):
     # Check if website already exists for this user
+    
+    print("=== Creating Website ===")
+    print("Received data:", website.dict())
     existing_website = db.query(Website).filter(
         Website.user_id == website.user_id,
         Website.domain == website.domain
     ).first()
     
     if existing_website:
+        print("Returning existing website:", existing_website.__dict__)
         return existing_website  # Return existing website instead of creating new one
         
     db_website = Website(**website.dict())
     db.add(db_website)
     db.commit()
     db.refresh(db_website)
+    print(f"Created website: {db_website}")
     return db_website
 
 @router.get("/websites/lookup", response_model=WebsiteSchema)
