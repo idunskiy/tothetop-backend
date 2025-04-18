@@ -32,7 +32,14 @@ router = APIRouter()
 
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # This ensures logs go to stdout which Docker can capture
+        logging.FileHandler('api.log')  # This will also save logs to a file
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Dependency
@@ -384,15 +391,15 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 def create_website(website: WebsiteCreate, db: Session = Depends(get_db)):
     # Check if website already exists for this user
     
-    logger.info("=== Creating Website ===")
-    logger.info("Received data:", website.dict())
+    logger.info(f"=== Creating Website ===")
+    logger.info(f"Received data: {website.dict()}")
     existing_website = db.query(Website).filter(
         Website.user_id == website.user_id,
         Website.domain == website.domain
     ).first()
     
     if existing_website:
-        logger.info("Returning existing website:", existing_website.__dict__)
+        logger.info(f"Returning existing website: {existing_website.__dict__}")
         return existing_website  # Return existing website instead of creating new one
         
     db_website = Website(**website.dict())
