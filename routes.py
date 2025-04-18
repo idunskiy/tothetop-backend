@@ -32,16 +32,32 @@ import sys
 router = APIRouter()
 
 
-# Set up logging
+# Remove all existing logging configuration
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
+# Configure logging with a more verbose format
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout),  # This ensures logs go to stdout which Docker can capture
-        logging.FileHandler('api.log')  # This will also save logs to a file
+        logging.StreamHandler(sys.stdout),
     ]
 )
+
+# Force the logger to use INFO level
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Add a stream handler directly to this logger
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+# Test log to verify logging is working
+logger.info("=== Logger initialized ===")
 
 # Dependency
 def get_db():
