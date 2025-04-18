@@ -16,6 +16,9 @@ services:
       - RABBITMQ_PORT=5672
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      # Add these Playwright-specific environment variables
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - DISPLAY=:99
     volumes:
       - ..:/app  # Mount the code for development
     ports:
