@@ -384,22 +384,22 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 def create_website(website: WebsiteCreate, db: Session = Depends(get_db)):
     # Check if website already exists for this user
     
-    print("=== Creating Website ===")
-    print("Received data:", website.dict())
+    logger.info("=== Creating Website ===")
+    logger.info("Received data:", website.dict())
     existing_website = db.query(Website).filter(
         Website.user_id == website.user_id,
         Website.domain == website.domain
     ).first()
     
     if existing_website:
-        print("Returning existing website:", existing_website.__dict__)
+        logger.info("Returning existing website:", existing_website.__dict__)
         return existing_website  # Return existing website instead of creating new one
         
     db_website = Website(**website.dict())
     db.add(db_website)
     db.commit()
     db.refresh(db_website)
-    print(f"Created website: {db_website}")
+    logger.info(f"Created website: {db_website}")
     return db_website
 
 @router.get("/websites/lookup", response_model=WebsiteSchema)
@@ -408,11 +408,11 @@ def get_website_by_url(
     user_id: int = Query(..., gt=0, description="User ID"),
     db: Session = Depends(get_db)
 ):
-    print(f"Received lookup request - Domain: {domain}, User ID: {user_id}")  # Debug log
+    logger.info(f"Received lookup request - Domain: {domain}, User ID: {user_id}")  # Debug log
     
     # Add debug logging
     existing_domains = db.query(Website.domain).filter(Website.user_id == user_id).all()
-    print(f"Existing domains for user {user_id}: {existing_domains}")
+    logger.info(f"Existing domains for user {user_id}: {existing_domains}")
     
     website = db.query(Website).filter(
         Website.domain == domain,
