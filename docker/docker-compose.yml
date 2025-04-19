@@ -14,8 +14,8 @@ services:
       - PROJECT_NAME=${PROJECT_NAME:-backend}  # Add project name env var
       - RABBITMQ_HOST=tothetop_rabbitmq
       - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - RABBITMQ_USER=${RABBITMQ_USER:-tothetop_user}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-your_secure_password}
       # Add these Playwright-specific environment variables
       - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
       - DISPLAY=:99
