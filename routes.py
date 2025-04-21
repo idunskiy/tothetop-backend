@@ -70,6 +70,8 @@ def get_db():
 class CrawlRequest(BaseModel):
     base_url: HttpUrl
     batch_id: str
+    user_id: int  
+    website_id: int
 
 class PageData(BaseModel):
     url: str
@@ -114,74 +116,6 @@ class CrawlStatus(BaseModel):
 crawl_sessions = {}
 ai_service = AIService()
 
-# Crawl a website and extract SEO-relevant content from each page.
-# @router.post("/crawl", response_model=CrawlResponse)
-# async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
-#     try:
-#         session_id = str(uuid.uuid4())
-        
-#         # Initialize the session first
-#         crawl_sessions[session_id] = {
-#             "status": "starting",
-#             "pages_found": 0,
-#             "pages_crawled": 0,
-#             "batch_id": request.batch_id
-#         }
-        
-#         crawler = Crawler(str(request.base_url), request.batch_id)
-        
-#         def update_progress(total_pages, crawled_pages, current_url):
-#             crawl_sessions[session_id].update({
-#                 "status": crawler.status,
-#                 "pages_found": total_pages,
-#                 "pages_crawled": crawled_pages,
-#                 "current_url": current_url
-#             })
-        
-#         crawler.set_progress_callback(update_progress)
-        
-#         results = await crawler.crawl()
-        
-#         # Save results to database, checking for duplicates
-#         saved_pages = []
-#         for page in results['pages']:
-#             # Check if page already exists with same content
-#             existing_page = db.query(CrawlerResult).filter(
-#                 CrawlerResult.page_url == page['url'],
-#                 CrawlerResult.word_count == page['word_count'],
-#                 CrawlerResult.batch_id == request.batch_id  # Add batch_id to filter
-#             ).first()
-            
-#             if not existing_page:
-#                 # Create new page record
-#                 new_page = CrawlerResult(
-#                     page_url=page['url'],
-#                     title=page['title'],
-#                     meta_description=page['meta_description'],
-#                     h1=page['h1'],
-#                     h2=page['h2'],
-#                     h3=page['h3'],
-#                     body_text=page['body_text'],
-#                     word_count=page['word_count'],
-#                     status=page['status'],
-#                     batch_id=request.batch_id
-#                 )
-#                 db.add(new_page)
-#                 saved_pages.append(page)
-        
-#         db.commit()
-        
-#         crawl_sessions[session_id].update({
-#             "status": "completed"
-#         })
-        
-#         return {
-#             "session_id": session_id,
-#             **results
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
 @router.get("/user/email/{db_user_id}")
 def get_user_email(db_user_id: int, db: Session = Depends(get_db)):
     """Get user's email by their database ID."""
@@ -207,6 +141,8 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
             "pages_found": 0,
             "pages_crawled": 0,
             "batch_id": request.batch_id,
+            "website_id": request.website_id,
+            "user_id": request.user_id,
             "current_url": None
         }
         
@@ -239,7 +175,9 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
                 crawler=crawler,
                 session_id=session_id,
                 db=db,
-                batch_id=request.batch_id
+                batch_id=request.batch_id,
+                website_id=request.website_id,
+                user_id=request.user_id
             )
         )
         
@@ -248,7 +186,7 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_id: str):
+async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_id: str, website_id: int, user_id: int):
     try:
         logger.info(f"Starting crawl task for session {session_id}")
         results = await crawler.crawl()
@@ -259,10 +197,16 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
         saved_pages = []
         try:
             for page in results['pages']:
+                
+                print(f"Saving page: {page}")
+                logger.info(f"Saving page: {page}")
+                
                 existing_page = db.query(CrawlerResult).filter(
                     CrawlerResult.page_url == page['url'],
                     CrawlerResult.word_count == page['word_count'],
-                    CrawlerResult.batch_id == batch_id
+                    CrawlerResult.batch_id == batch_id,
+                    CrawlerResult.website_id == website_id,
+                    CrawlerResult.user_id == user_id
                 ).first()
                 
                 if not existing_page:
@@ -277,6 +221,8 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
                         word_count=page['word_count'],
                         status=page['status'],
                         batch_id=batch_id,
+                        website_id=website_id,
+                        user_id=user_id,
                         full_text=page['full_text']
                     )
                     db.add(new_page)
@@ -367,12 +313,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         # Either return the existing user
         return existing_user
-        # Or update the existing user's information
-        # existing_user.name = user.name
-        # existing_user.google_id = user.google_id
-        # db.commit()
-        # return existing_user
-    
+        
     # If user doesn't exist, create new user
     new_user = User(
         email=user.email,

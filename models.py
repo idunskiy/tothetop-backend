@@ -89,6 +89,8 @@ class CrawlerResult(Base):
     status = Column(String(50))
     batch_id = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    website_id = Column(Integer, ForeignKey('websites.id'))
+    user_id = Column(Integer, ForeignKey('users.id'))
 
     
 class PageOptimization(Base):
