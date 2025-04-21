@@ -28,7 +28,7 @@ from schemas import IntentRequest
 import os
 import time
 import sys
-
+from fastapi import BackgroundTasks
 router = APIRouter()
 
 
@@ -130,7 +130,7 @@ def get_user_email(db_user_id: int, db: Session = Depends(get_db)):
     
     
 @router.post("/crawl", response_model=CrawlResponse)
-async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
+async def crawl_website(request: CrawlRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     try:
         session_id = str(uuid.uuid4())
         logger.info(f"Starting crawl for session {session_id}")
@@ -170,16 +170,28 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
         logger.info(f"Initial response: {initial_response}")
 
         # Start crawling in a separate task
-        asyncio.create_task(
-            run_crawl_task(
-                crawler=crawler,
-                session_id=session_id,
-                db=db,
-                batch_id=request.batch_id,
-                website_id=request.website_id,
-                user_id=request.user_id
-            )
+        # asyncio.create_task(
+        #     run_crawl_task(
+        #         crawler=crawler,
+        #         session_id=session_id,
+        #         db=db,
+        #         batch_id=request.batch_id,
+        #         website_id=request.website_id,
+        #         user_id=request.user_id
+        #     )
+        # )
+        
+        background_tasks.add_task(
+            run_crawl_task,
+            crawler=crawler,
+            session_id=session_id,
+            db=db,
+            batch_id=request.batch_id,
+            website_id=request.website_id,
+            user_id=request.user_id
         )
+        
+        logger.info(f"Inital response: {initial_response}")
         
         return initial_response
 
@@ -189,9 +201,13 @@ async def crawl_website(request: CrawlRequest, db: Session = Depends(get_db)):
 async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_id: str, website_id: int, user_id: int):
     try:
         logger.info(f"Starting crawl task for session {session_id}")
+        
+        if session_id not in crawl_sessions:
+            logger.error(f"Session {session_id} not found in crawl_sessions")
+            return
+        
         results = await crawler.crawl()
         logger.info(f"Crawl completed, saving {len(results['pages'])} pages to database")
-
         
         # Save results to database
         saved_pages = []
