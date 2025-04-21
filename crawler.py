@@ -79,13 +79,17 @@ class Crawler:
         'current_url': None
          }
         
-        # Initialize robots.txt parser
+        # Initialize robots.txt parser with more logging
         self.robots_parser = RobotFileParser()
-        self.robots_parser.set_url(f"{base_url}/robots.txt")
+        robots_url = f"{base_url}/robots.txt"
+        logger.info(f"Attempting to fetch robots.txt from: {robots_url}")
+        self.robots_parser.set_url(robots_url)
         try:
             self.robots_parser.read()
+            logger.info("Successfully read robots.txt")
         except Exception as e:
             logger.warning(f"Could not read robots.txt: {str(e)}")
+            logger.info("Proceeding without robots.txt restrictions")
             self.robots_parser = None
 
     def normalize_url(self, url: str) -> str:
@@ -502,5 +506,15 @@ class Crawler:
     def is_allowed(self, url: str) -> bool:
         """Check if URL is allowed by robots.txt."""
         if self.robots_parser is None:
+            logger.info(f"No robots.txt restrictions, allowing URL: {url}")
             return True
-        return self.robots_parser.can_fetch(settings.USER_AGENT, url) 
+        
+        is_allowed = self.robots_parser.can_fetch(settings.USER_AGENT, url)
+        logger.info(f"Robots.txt check for {url}: {'allowed' if is_allowed else 'not allowed'}")
+        
+        # If robots.txt exists but blocks everything, we'll proceed anyway
+        if not is_allowed:
+            logger.warning(f"URL {url} is blocked by robots.txt, but proceeding anyway")
+            return True
+            
+        return True
