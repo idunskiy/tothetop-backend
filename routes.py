@@ -211,7 +211,8 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
             "status": "starting",
             "pages_found": 0,
             "pages_crawled": 0,
-            "current_url": None
+            "current_url": None,
+            "pages": None
         })
         
         logger.info("Initializing crawler...")
@@ -222,7 +223,8 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
             logger.error(f"Error during crawl: {str(e)}", exc_info=True)
             crawl_sessions[session_id].update({
                 "status": "failed",
-                "error": f"Crawl error: {str(e)}"
+                "error": f"Crawl error: {str(e)}",
+                "pages": []
             })
             return
         
@@ -230,7 +232,8 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
             logger.error("Crawler returned no results or empty pages")
             crawl_sessions[session_id].update({
                 "status": "failed",
-                "error": "Crawler returned no pages"
+                "error": "Crawler returned no pages",
+                "pages": []
             })
             return
         
@@ -282,9 +285,12 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
         crawl_sessions[session_id].update({
             "status": "completed",
             "pages": saved_pages,
-            "statistics": results['statistics']
+            "statistics": results['statistics'],
+            "pages_found": len(results['pages']),
+            "pages_crawled": len(saved_pages)
         })
-        
+        await asyncio.sleep(1)
+        logger.info(f"Crawl task completed, updated session {session_id}")
     except Exception as e:
         logger.error(f"Error in run_crawl_task: {str(e)}")
         crawl_sessions[session_id].update({
