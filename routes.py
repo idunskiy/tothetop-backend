@@ -206,9 +206,36 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
             logger.error(f"Session {session_id} not found in crawl_sessions")
             return
         
-        results = await crawler.crawl()
-        logger.info(f"Crawl completed, saving {len(results['pages'])} pages to database")
+        # Update status to starting
+        crawl_sessions[session_id].update({
+            "status": "starting",
+            "pages_found": 0,
+            "pages_crawled": 0,
+            "current_url": None
+        })
         
+        logger.info("Initializing crawler...")
+        try:
+            results = await crawler.crawl()
+            logger.info(f"Crawl completed, saving {len(results['pages'])} pages to database")
+        except Exception as e:
+            logger.error(f"Error during crawl: {str(e)}", exc_info=True)
+            crawl_sessions[session_id].update({
+                "status": "failed",
+                "error": f"Crawl error: {str(e)}"
+            })
+            return
+        
+        if not results or not results.get('pages'):
+            logger.error("Crawler returned no results or empty pages")
+            crawl_sessions[session_id].update({
+                "status": "failed",
+                "error": "Crawler returned no pages"
+            })
+            return
+        
+        logger.info(f"Crawl completed, found {len(results['pages'])} pages")
+
         # Save results to database
         saved_pages = []
         try:
