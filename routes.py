@@ -167,7 +167,7 @@ async def crawl_website(request: CrawlRequest, background_tasks: BackgroundTasks
             "statistics": {}
         }
         
-        logger.info(f"Initial response: {initial_response}")
+        logger.info(f"Initial response in crawl route: {initial_response}")
 
         # Start crawling in a separate task
         # asyncio.create_task(
@@ -244,8 +244,7 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
         try:
             for page in results['pages']:
                 
-                print(f"Saving page: {page}")
-                logger.info(f"Saving page: {page}")
+                logger.info(f"Saving page: {page['url']}")
                 
                 existing_page = db.query(CrawlerResult).filter(
                     CrawlerResult.page_url == page['url'],

@@ -11,9 +11,34 @@ import logging
 from collections import deque
 import time
 from datetime import datetime
+import sys
 
-logging.basicConfig(level=logging.INFO)
+# Remove all existing logging configuration
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
+# Configure logging with a more verbose format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+    ]
+)
+
+# Force the logger to use INFO level
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Add a stream handler directly to this logger
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+# Test log to verify logging is working
+logger.info("=== Crawler Logger initialized ===")
 
 class Crawler:
     def __init__(self, base_url: str, batch_id: str):
@@ -89,15 +114,20 @@ class Crawler:
         """Main crawling method that orchestrates the crawling process."""
         self.stats["start_time"] = datetime.now()
         
+        logger.info(f"Starting crawl in crawler.py for {self.base_url}")
+        logger.info(f"Initializing crawler with settings: MAX_WORKERS={settings.MAX_WORKERS}")
         # Initialize single browser instance
         async with async_playwright() as p:
+            logger.info("Playwright initialized successfully")
             self.browser = await p.chromium.launch()
+            logger.info("Browser launched successfully")
             
             async with httpx.AsyncClient(
                 timeout=settings.TIMEOUT,
                 headers={"User-Agent": settings.USER_AGENT},
                 limits=httpx.Limits(max_connections=settings.MAX_WORKERS)
             ) as client:
+                logger.info("HTTP client initialized successfully")
                 while self.url_queue:
                     batch = []
                     for _ in range(settings.MAX_WORKERS):
@@ -105,19 +135,21 @@ class Crawler:
                             break
                         batch.append(self.url_queue.popleft())
                     
+                    logger.info(f"Processing {len(batch)} URLs")
                     tasks = [
                         self.process_url_with_semaphore(url, client)
                         for url in batch
                     ]
                     await asyncio.gather(*tasks)
-                    
+                    logger.info("All tasks completed")
             await self.browser.close()
+            logger.info("Browser closed successfully")
         
         # Calculate final statistics
         self.stats["end_time"] = datetime.now()
         self.stats["parse_time_seconds"] = (self.stats["end_time"] - self.stats["start_time"]).total_seconds()
         self.stats["total_pages_found"] = len(self.processed_urls) + len(self.url_queue)
-        
+        logger.info(f"Final statistics: {self.stats}")
         return {
             "pages": self.results,
             "statistics": self.stats
@@ -137,11 +169,15 @@ class Crawler:
 
     async def process_url(self, url: str, client: httpx.AsyncClient) -> None:
         """Process a single URL and extract its content."""
+        logger.info(f"🔄 Processing URL in process_url in crawler.py: {url}")
         current_url = self.normalize_url(url)
+        logger.info(f"🔄 Normalized URL in process_url in crawler.py: {current_url}")
         if current_url in self.processed_urls:
+            logger.info(f"Skip: URL already processed in process_url in crawler.py: {current_url}")
             return
             
         if not self.is_allowed(current_url):
+            logger.info(f"Skip: URL not allowed in process_url in crawler.py: {current_url}")
             return
             
         try:
