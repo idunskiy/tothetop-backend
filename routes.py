@@ -539,7 +539,8 @@ def get_last_batch(
     try:
         # Query the most recent batch_id from GSCKeywordData
         last_batch = db.query(GSCKeywordData.batch_id)\
-            .filter(GSCKeywordData.website_id == website_id)\
+            .filter(GSCKeywordData.website_id == website_id,
+                    GSCKeywordData.user_id == user_id)\
             .order_by(GSCKeywordData.created_at.desc())\
             .first()
         
@@ -548,7 +549,8 @@ def get_last_batch(
         if not last_batch:
             # If no batch found in GSCKeywordData, try CrawlerResult
             last_batch = db.query(CrawlerResult.batch_id)\
-                .filter(CrawlerResult.batch_id.isnot(None))\
+                .filter(CrawlerResult.batch_id.isnot(None),
+                        CrawlerResult.user_id == user_id)\
                 .order_by(CrawlerResult.created_at.desc())\
                 .first()
 
