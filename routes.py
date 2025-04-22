@@ -753,7 +753,6 @@ async def add_keywords(
 ):
     try:
         
-        
         url = request_data.get("url")
         batch_id = request_data.get("batch_id")
         
@@ -887,6 +886,27 @@ async def save_optimization(
         user = db.query(User).filter(User.email == optimization.email).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        
+        keywords_json = None
+        if optimization.keywords_used:
+            keywords_json = [
+                {
+                    "keyword": kw.keyword,
+                    "impressions": kw.impressions,
+                    "position": kw.position
+                }
+                for kw in optimization.keywords_used
+            ]
+            
+        sources_json = None
+        if optimization.sources:
+            sources_json = [
+                {
+                    "title": source.title,
+                    "url": source.url   
+                }
+                for source in optimization.sources
+            ]
 
         new_optimization = PageOptimization(
             user_id=user.id,
@@ -896,8 +916,8 @@ async def save_optimization(
             reasoning=optimization.reasoning,
             original_content=optimization.original_content,
             modified_content=optimization.modified_content,
-            keywords_used=optimization.keywords_used if optimization.optimization_type == 'add_keywords' else None,
-            sources=optimization.sources if optimization.optimization_type == 'optimize_section' else None
+            keywords_used=keywords_json if optimization.optimization_type == 'add_keywords' else None,
+            sources=sources_json if optimization.optimization_type == 'optimize_section' else None
         )
         
         db.add(new_optimization)
