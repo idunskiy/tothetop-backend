@@ -117,7 +117,16 @@ class IntentRequest(BaseModel):
     meta_description: Optional[str] = None
     target_keywords: Optional[List[str]] = None
 
-# Add these Pydantic models at the top with your other models
+
+class KeywordUsed(BaseModel):
+    keyword: str
+    impressions: int
+    position: float
+
+class Source(BaseModel):
+    title: str
+    url: str
+    
 class OptimizationCreate(BaseModel):
     email: str
     url: str
@@ -126,6 +135,8 @@ class OptimizationCreate(BaseModel):
     reasoning: str
     original_content: str
     modified_content: str
+    keywords_used: Optional[List[KeywordUsed]] = None
+    sources: Optional[List[Source]] = None
 
 class OptimizationResponse(BaseModel):
     id: int

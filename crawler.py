@@ -171,19 +171,91 @@ class Crawler:
             self.last_request_time = time.time()
             await self.process_url(url, client)
 
+    # async def process_url(self, url: str, client: httpx.AsyncClient) -> None:
+    #     """Process a single URL and extract its content."""
+    #     logger.info(f"🔄 Processing URL in process_url in crawler.py: {url}")
+    #     current_url = self.normalize_url(url)
+    #     logger.info(f"🔄 Normalized URL in process_url in crawler.py: {current_url}")
+    #     if current_url in self.processed_urls:
+    #         logger.info(f"Skip: URL already processed in process_url in crawler.py: {current_url}")
+    #         return
+            
+    #     if not self.is_allowed(current_url):
+    #         logger.info(f"Skip: URL not allowed in process_url in crawler.py: {current_url}")
+    #         return
+            
+    #     try:
+    #         self.processed_urls.add(current_url)
+    #         self.stats["pages_parsed"] += 1
+            
+    #         # Update these values with more stable counts
+    #         self.pages_crawled = len(self.processed_urls)
+    #         self.pages_found = len(self.processed_urls | self.visited_urls | set(self.url_queue))
+    #         self.current_url = current_url
+            
+    #         self.session_data['pages_crawled'] = self.pages_crawled
+    #         self.session_data['pages_found'] = self.pages_found
+    #         self.session_data['current_url'] = current_url
+            
+    #         # Log the stable progress
+    #         logger.info(f"Progress: {self.pages_crawled} out of {self.pages_found} pages crawled. Current: {current_url}")
+            
+    #         if self.progress_callback:
+    #             self.progress_callback(self.pages_found, self.pages_crawled, current_url)
+            
+    #         # Try basic parsing first
+    #         response = await client.get(current_url)
+    #         soup = BeautifulSoup(response.text, 'html.parser')
+            
+    #         # Extract content using basic parsing
+    #         page_data = await self.extract_content_basic(soup, current_url)
+            
+    #         # Check if we need to try Playwright
+    #         if self.needs_playwright(page_data):
+    #             page_data = await self.extract_content_playwright(current_url)
+            
+    #         self.results.append(page_data)
+    #         self.stats["successful_pages"] += 1
+            
+    #         # Extract and queue new URLs
+    #         await self.extract_and_queue_urls(soup, current_url)
+            
+    #     except Exception as e:
+    #         logger.error(f"Error processing {current_url}: {str(e)}")
+    #         self.results.append({
+    #             "url": current_url,
+    #             "status": "fail",
+    #             "error_message": str(e)
+    #         })
+    #         self.stats["failed_pages"] += 1
+    #         self.stats["failed_urls"].append({
+    #             "url": current_url,
+    #             "error": str(e)
+    #         })
+    #     finally:
+    #         # Ensure semaphore is released
+    #         if hasattr(self, 'semaphore'):
+    #             try:
+    #                 self.semaphore.release()
+    #             except ValueError:
+    #                 pass  # Semaphore was already released
+    
+    
     async def process_url(self, url: str, client: httpx.AsyncClient) -> None:
         """Process a single URL and extract its content."""
-        logger.info(f"🔄 Processing URL in process_url in crawler.py: {url}")
         current_url = self.normalize_url(url)
-        logger.info(f"🔄 Normalized URL in process_url in crawler.py: {current_url}")
+        
+        # Skip PDFs
+        if current_url.lower().endswith('.pdf'):
+            logger.info(f"Skipping PDF file: {current_url}")
+            return
+        
         if current_url in self.processed_urls:
-            logger.info(f"Skip: URL already processed in process_url in crawler.py: {current_url}")
             return
-            
+        
         if not self.is_allowed(current_url):
-            logger.info(f"Skip: URL not allowed in process_url in crawler.py: {current_url}")
             return
-            
+        
         try:
             self.processed_urls.add(current_url)
             self.stats["pages_parsed"] += 1
@@ -193,9 +265,12 @@ class Crawler:
             self.pages_found = len(self.processed_urls | self.visited_urls | set(self.url_queue))
             self.current_url = current_url
             
-            self.session_data['pages_crawled'] = self.pages_crawled
-            self.session_data['pages_found'] = self.pages_found
-            self.session_data['current_url'] = current_url
+            self.session_data.update({
+                'pages_crawled': self.pages_crawled,
+                'pages_found': self.pages_found,
+                'current_url': current_url,
+                'status': 'in_progress'
+            })
             
             # Log the stable progress
             logger.info(f"Progress: {self.pages_crawled} out of {self.pages_found} pages crawled. Current: {current_url}")
@@ -491,6 +566,10 @@ class Crawler:
             full_url = urljoin(base_url, href)
             current_url = self.normalize_url(full_url)
             
+            # Skip PDFs
+            if current_url.lower().endswith('.pdf'):
+                continue
+            
             if (
                 self.is_same_domain(current_url) and
                 current_url not in self.processed_urls and
@@ -503,18 +582,24 @@ class Crawler:
         """Check if URL is from the same domain."""
         return urlparse(url).netloc == self.domain
 
+    # def is_allowed(self, url: str) -> bool:
+    #     """Check if URL is allowed by robots.txt."""
+    #     if self.robots_parser is None:
+    #         logger.info(f"No robots.txt restrictions, allowing URL: {url}")
+    #         return True
+        
+    #     is_allowed = self.robots_parser.can_fetch(settings.USER_AGENT, url)
+    #     logger.info(f"Robots.txt check for {url}: {'allowed' if is_allowed else 'not allowed'}")
+        
+    #     # If robots.txt exists but blocks everything, we'll proceed anyway
+    #     if not is_allowed:
+    #         logger.warning(f"URL {url} is blocked by robots.txt, but proceeding anyway")
+    #         return True
+            
+    #     return True
+    
     def is_allowed(self, url: str) -> bool:
         """Check if URL is allowed by robots.txt."""
         if self.robots_parser is None:
-            logger.info(f"No robots.txt restrictions, allowing URL: {url}")
             return True
-        
-        is_allowed = self.robots_parser.can_fetch(settings.USER_AGENT, url)
-        logger.info(f"Robots.txt check for {url}: {'allowed' if is_allowed else 'not allowed'}")
-        
-        # If robots.txt exists but blocks everything, we'll proceed anyway
-        if not is_allowed:
-            logger.warning(f"URL {url} is blocked by robots.txt, but proceeding anyway")
-            return True
-            
-        return True
+        return self.robots_parser.can_fetch(settings.USER_AGENT, url) 

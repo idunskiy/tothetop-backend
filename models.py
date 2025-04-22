@@ -99,12 +99,14 @@ class PageOptimization(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'))
     url = Column(Text, nullable=False)
-    optimization_type = Column(Text, nullable=False)  # 'keyword' or 'section'
+    optimization_type = Column(Text, nullable=False)  # 'add_keywords' or 'optimize_section'
     summary = Column(Text, nullable=False)
     reasoning = Column(Text, nullable=False)
     original_content = Column(Text, nullable=False)
     modified_content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=func.now())
+    keywords_used = Column(JSONB, nullable=True)  # Add this for keywords
+    sources = Column(JSONB, nullable=True)        # Add this for sources
 
     # Add indexes for better query performance
     __table_args__ = (
