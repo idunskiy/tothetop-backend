@@ -244,7 +244,7 @@ class Crawler:
     async def process_url(self, url: str, client: httpx.AsyncClient) -> None:
         """Process a single URL and extract its content."""
         current_url = self.normalize_url(url)
-        
+        logger.info(f"🔄 Processing URL in process_url in crawler.py: {current_url}")
         # Skip PDFs
         if current_url.lower().endswith('.pdf'):
             logger.info(f"Skipping PDF file: {current_url}")
@@ -254,6 +254,7 @@ class Crawler:
             return
         
         if not self.is_allowed(current_url):
+            logger.info(f"Skip: URL not allowed in process_url in crawler.py: {current_url}")
             return
         
         try:
@@ -273,7 +274,7 @@ class Crawler:
             })
             
             # Log the stable progress
-            logger.info(f"Progress: {self.pages_crawled} out of {self.pages_found} pages crawled. Current: {current_url}")
+            logger.info(f"Progress in process_url in crawler.py: {self.pages_crawled} out of {self.pages_found} pages crawled. Current: {current_url}")
             
             if self.progress_callback:
                 self.progress_callback(self.pages_found, self.pages_crawled, current_url)
@@ -285,15 +286,20 @@ class Crawler:
             # Extract content using basic parsing
             page_data = await self.extract_content_basic(soup, current_url)
             
+            logger.info(f"Page data in process_url in crawler.py: {page_data}")
+            
             # Check if we need to try Playwright
             if self.needs_playwright(page_data):
+                logger.info(f"Trying Playwright for {current_url}")
                 page_data = await self.extract_content_playwright(current_url)
+                logger.info(f"Page data after Playwright in process_url in crawler.py: {page_data}")
             
             self.results.append(page_data)
             self.stats["successful_pages"] += 1
             
             # Extract and queue new URLs
             await self.extract_and_queue_urls(soup, current_url)
+            logger.info(f"Extracted and queued URLs in process_url in crawler.py")
             
         except Exception as e:
             logger.error(f"Error processing {current_url}: {str(e)}")
