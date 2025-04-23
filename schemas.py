@@ -160,6 +160,8 @@ class OptimizationDetail(BaseModel):
     reasoning: str
     modified_content: str
     created_at: str
+    keywords_used: Optional[List[KeywordUsed]] = None
+    sources: Optional[List[Source]] = None
 
 class OptimizationsList(BaseModel):
     pages: List[OptimizationDetail]

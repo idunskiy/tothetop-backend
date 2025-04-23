@@ -953,7 +953,9 @@ async def get_optimizations(
             PageOptimization.reasoning,
             PageOptimization.created_at,
             PageOptimization.optimization_type,
-            PageOptimization.modified_content
+            PageOptimization.modified_content,
+            PageOptimization.keywords_used,
+            PageOptimization.sources
         ).filter(
             PageOptimization.user_id == user.id
         ).order_by(
@@ -967,9 +969,11 @@ async def get_optimizations(
             'created_at': opt.created_at.isoformat(),
             'reasoning': opt.reasoning,
             'optimization_type': opt.optimization_type,
-            'modified_content': opt.modified_content
+            'modified_content': opt.modified_content,
+            'keywords_used': opt.keywords_used,
+            'sources': opt.sources
         } for opt in optimizations]
-        
+
         return {"pages": pages}
 
     except Exception as e:
@@ -999,7 +1003,9 @@ async def get_optimization_detail(
             "reasoning": optimization.reasoning,
             "original_content": optimization.original_content,
             "modified_content": optimization.modified_content,
-            "created_at": optimization.created_at.isoformat()
+            "created_at": optimization.created_at.isoformat(),
+            "keywords_used": optimization.keywords_used,
+            "sources": optimization.sources
         }
 
     except Exception as e:
