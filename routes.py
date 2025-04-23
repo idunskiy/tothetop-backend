@@ -970,8 +970,6 @@ async def get_optimizations(
             'modified_content': opt.modified_content
         } for opt in optimizations]
         
-        print(f"Optimized pages for user {email}: {pages}")
-        
         return {"pages": pages}
 
     except Exception as e:

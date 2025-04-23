@@ -292,7 +292,6 @@ class Crawler:
             if self.needs_playwright(page_data):
                 logger.info(f"Trying Playwright for {current_url}")
                 page_data = await self.extract_content_playwright(current_url)
-                logger.info(f"Page data after Playwright in process_url in crawler.py: {page_data}")
             
             self.results.append(page_data)
             self.stats["successful_pages"] += 1
@@ -588,24 +587,24 @@ class Crawler:
         """Check if URL is from the same domain."""
         return urlparse(url).netloc == self.domain
 
-    # def is_allowed(self, url: str) -> bool:
-    #     """Check if URL is allowed by robots.txt."""
-    #     if self.robots_parser is None:
-    #         logger.info(f"No robots.txt restrictions, allowing URL: {url}")
-    #         return True
-        
-    #     is_allowed = self.robots_parser.can_fetch(settings.USER_AGENT, url)
-    #     logger.info(f"Robots.txt check for {url}: {'allowed' if is_allowed else 'not allowed'}")
-        
-    #     # If robots.txt exists but blocks everything, we'll proceed anyway
-    #     if not is_allowed:
-    #         logger.warning(f"URL {url} is blocked by robots.txt, but proceeding anyway")
-    #         return True
-            
-    #     return True
-    
     def is_allowed(self, url: str) -> bool:
         """Check if URL is allowed by robots.txt."""
         if self.robots_parser is None:
+            logger.info(f"No robots.txt restrictions, allowing URL: {url}")
             return True
-        return self.robots_parser.can_fetch(settings.USER_AGENT, url) 
+        
+        is_allowed = self.robots_parser.can_fetch(settings.USER_AGENT, url)
+        logger.info(f"Robots.txt check for {url}: {'allowed' if is_allowed else 'not allowed'}")
+        
+        # If robots.txt exists but blocks everything, we'll proceed anyway
+        if not is_allowed:
+            logger.warning(f"URL {url} is blocked by robots.txt, but proceeding anyway")
+            return True
+            
+        return True
+    
+    # def is_allowed(self, url: str) -> bool:
+    #     """Check if URL is allowed by robots.txt."""
+    #     if self.robots_parser is None:
+    #         return True
+    #     return self.robots_parser.can_fetch(settings.USER_AGENT, url) 
