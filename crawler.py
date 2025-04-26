@@ -114,18 +114,62 @@ class Crawler:
             logger.error(f"Crawl failed: {str(e)}")
             raise
         
-    async def crawl(self) -> Dict:
-        """Main crawling method that orchestrates the crawling process."""
-        self.stats["start_time"] = datetime.now()
+    # Old implementation - parse all and then save to db
+    
+    # async def crawl(self) -> Dict:
+    #     """Main crawling method that orchestrates the crawling process."""
+    #     self.stats["start_time"] = datetime.now()
         
+    #     logger.info(f"Starting crawl in crawler.py for {self.base_url}")
+    #     logger.info(f"Initializing crawler with settings: MAX_WORKERS={settings.MAX_WORKERS}")
+    #     # Initialize single browser instance
+    #     async with async_playwright() as p:
+    #         logger.info("Playwright initialized successfully")
+    #         self.browser = await p.chromium.launch()
+    #         logger.info("Browser launched successfully")
+            
+    #         async with httpx.AsyncClient(
+    #             timeout=settings.TIMEOUT,
+    #             headers={"User-Agent": settings.USER_AGENT},
+    #             limits=httpx.Limits(max_connections=settings.MAX_WORKERS)
+    #         ) as client:
+    #             logger.info("HTTP client initialized successfully")
+    #             while self.url_queue:
+    #                 batch = []
+    #                 for _ in range(settings.MAX_WORKERS):
+    #                     if not self.url_queue:
+    #                         break
+    #                     batch.append(self.url_queue.popleft())
+                    
+    #                 logger.info(f"Processing {len(batch)} URLs")
+    #                 tasks = [
+    #                     self.process_url_with_semaphore(url, client)
+    #                     for url in batch
+    #                 ]
+    #                 await asyncio.gather(*tasks)
+    #                 logger.info("All tasks completed")
+    #         await self.browser.close()
+    #         logger.info("Browser closed successfully")
+        
+    #     # Calculate final statistics
+    #     self.stats["end_time"] = datetime.now()
+    #     self.stats["parse_time_seconds"] = (self.stats["end_time"] - self.stats["start_time"]).total_seconds()
+    #     self.stats["total_pages_found"] = len(self.processed_urls) + len(self.url_queue)
+    #     logger.info(f"Final statistics: {self.stats}")
+    #     return {
+    #         "pages": self.results,
+    #         "statistics": self.stats
+    #     }
+
+
+    async def crawl(self):
+        self.stats["start_time"] = datetime.now()
         logger.info(f"Starting crawl in crawler.py for {self.base_url}")
         logger.info(f"Initializing crawler with settings: MAX_WORKERS={settings.MAX_WORKERS}")
-        # Initialize single browser instance
         async with async_playwright() as p:
             logger.info("Playwright initialized successfully")
             self.browser = await p.chromium.launch()
             logger.info("Browser launched successfully")
-            
             async with httpx.AsyncClient(
                 timeout=settings.TIMEOUT,
                 headers={"User-Agent": settings.USER_AGENT},
@@ -138,27 +182,36 @@ class Crawler:
                         if not self.url_queue:
                             break
                         batch.append(self.url_queue.popleft())
-                    
                     logger.info(f"Processing {len(batch)} URLs")
                     tasks = [
                         self.process_url_with_semaphore(url, client)
                         for url in batch
                     ]
-                    await asyncio.gather(*tasks)
+                    results = await asyncio.gather(*tasks)
                     logger.info("All tasks completed")
-            await self.browser.close()
-            logger.info("Browser closed successfully")
-        
-        # Calculate final statistics
+                    for page in results:
+                        if page:  # Only yield valid pages
+                            yield page
+        await self.browser.close()
+        logger.info("Browser closed successfully")
         self.stats["end_time"] = datetime.now()
         self.stats["parse_time_seconds"] = (self.stats["end_time"] - self.stats["start_time"]).total_seconds()
         self.stats["total_pages_found"] = len(self.processed_urls) + len(self.url_queue)
-        logger.info(f"Final statistics: {self.stats}")
-        return {
-            "pages": self.results,
-            "statistics": self.stats
-        }
-
+        logger.info(f"Final statistics after crawl in crawler.py: {self.stats}")
+        
+    # Old method - save once everything is parsed 
+    # async def process_url_with_semaphore(self, url: str, client: httpx.AsyncClient):
+    #     """Process URL with semaphore for concurrency control"""
+    #     async with self.semaphore:
+    #         # Rate limiting
+    #         now = time.time()
+    #         time_since_last_request = now - self.last_request_time
+    #         if time_since_last_request < self.request_delay:
+    #             await asyncio.sleep(self.request_delay - time_since_last_request)
+            
+    #         self.last_request_time = time.time()
+    #         await self.process_url(url, client)
+    
     async def process_url_with_semaphore(self, url: str, client: httpx.AsyncClient):
         """Process URL with semaphore for concurrency control"""
         async with self.semaphore:
@@ -169,21 +222,25 @@ class Crawler:
                 await asyncio.sleep(self.request_delay - time_since_last_request)
             
             self.last_request_time = time.time()
-            await self.process_url(url, client)
+            return await self.process_url(url, client)
 
+    # Old method - save results once the crawling is done
     # async def process_url(self, url: str, client: httpx.AsyncClient) -> None:
     #     """Process a single URL and extract its content."""
-    #     logger.info(f"🔄 Processing URL in process_url in crawler.py: {url}")
     #     current_url = self.normalize_url(url)
-    #     logger.info(f"🔄 Normalized URL in process_url in crawler.py: {current_url}")
-    #     if current_url in self.processed_urls:
-    #         logger.info(f"Skip: URL already processed in process_url in crawler.py: {current_url}")
+    #     logger.info(f"🔄 Processing URL in process_url in crawler.py: {current_url}")
+    #     # Skip PDFs
+    #     if current_url.lower().endswith('.pdf'):
+    #         logger.info(f"Skipping PDF file: {current_url}")
     #         return
-            
+        
+    #     if current_url in self.processed_urls:
+    #         return
+        
     #     if not self.is_allowed(current_url):
     #         logger.info(f"Skip: URL not allowed in process_url in crawler.py: {current_url}")
     #         return
-            
+        
     #     try:
     #         self.processed_urls.add(current_url)
     #         self.stats["pages_parsed"] += 1
@@ -193,12 +250,15 @@ class Crawler:
     #         self.pages_found = len(self.processed_urls | self.visited_urls | set(self.url_queue))
     #         self.current_url = current_url
             
-    #         self.session_data['pages_crawled'] = self.pages_crawled
-    #         self.session_data['pages_found'] = self.pages_found
-    #         self.session_data['current_url'] = current_url
+    #         self.session_data.update({
+    #             'pages_crawled': self.pages_crawled,
+    #             'pages_found': self.pages_found,
+    #             'current_url': current_url,
+    #             'status': 'in_progress'
+    #         })
             
     #         # Log the stable progress
-    #         logger.info(f"Progress: {self.pages_crawled} out of {self.pages_found} pages crawled. Current: {current_url}")
+    #         logger.info(f"Progress in process_url in crawler.py: {self.pages_crawled} out of {self.pages_found} pages crawled. Current: {current_url}")
             
     #         if self.progress_callback:
     #             self.progress_callback(self.pages_found, self.pages_crawled, current_url)
@@ -210,8 +270,11 @@ class Crawler:
     #         # Extract content using basic parsing
     #         page_data = await self.extract_content_basic(soup, current_url)
             
+    #         logger.info(f"Page data in process_url in crawler.py: {page_data}")
+            
     #         # Check if we need to try Playwright
     #         if self.needs_playwright(page_data):
+    #             logger.info(f"Trying Playwright for {current_url}")
     #             page_data = await self.extract_content_playwright(current_url)
             
     #         self.results.append(page_data)
@@ -219,6 +282,7 @@ class Crawler:
             
     #         # Extract and queue new URLs
     #         await self.extract_and_queue_urls(soup, current_url)
+    #         logger.info(f"Extracted and queued URLs in process_url in crawler.py")
             
     #     except Exception as e:
     #         logger.error(f"Error processing {current_url}: {str(e)}")
@@ -282,6 +346,7 @@ class Crawler:
             # Try basic parsing first
             response = await client.get(current_url)
             soup = BeautifulSoup(response.text, 'html.parser')
+            page_data = await self.extract_content_basic(soup, current_url)
             
             # Extract content using basic parsing
             page_data = await self.extract_content_basic(soup, current_url)
@@ -299,6 +364,7 @@ class Crawler:
             # Extract and queue new URLs
             await self.extract_and_queue_urls(soup, current_url)
             logger.info(f"Extracted and queued URLs in process_url in crawler.py")
+            return page_data
             
         except Exception as e:
             logger.error(f"Error processing {current_url}: {str(e)}")
@@ -312,6 +378,7 @@ class Crawler:
                 "url": current_url,
                 "error": str(e)
             })
+            return None
         finally:
             # Ensure semaphore is released
             if hasattr(self, 'semaphore'):

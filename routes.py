@@ -66,7 +66,7 @@ def get_db():
         yield db
     finally:
         db.close()
-        
+
 class CrawlRequest(BaseModel):
     base_url: HttpUrl
     batch_id: str
@@ -183,9 +183,9 @@ async def crawl_website(request: CrawlRequest, background_tasks: BackgroundTasks
         
         background_tasks.add_task(
             run_crawl_task,
-            crawler=crawler,
-            session_id=session_id,
-            db=db,
+                crawler=crawler,
+                session_id=session_id,
+                db=db,
             batch_id=request.batch_id,
             website_id=request.website_id,
             user_id=request.user_id
@@ -198,95 +198,175 @@ async def crawl_website(request: CrawlRequest, background_tasks: BackgroundTasks
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+# Old implemneta tion of crawl task - save to database after everything is crawled
+# async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_id: str, website_id: int, user_id: int):
+#     try:
+#         logger.info(f"Starting crawl task for session {session_id}")
+        
+#         if session_id not in crawl_sessions:
+#             logger.error(f"Session {session_id} not found in crawl_sessions")
+#             return
+        
+#         # Update status to starting
+#         crawl_sessions[session_id].update({
+#             "status": "starting",
+#             "pages_found": 0,
+#             "pages_crawled": 0,
+#             "current_url": None,
+#             "pages": None
+#         })
+        
+#         logger.info("Initializing crawler...")
+#         try:
+#             results = await crawler.crawl()
+#             logger.info(f"Crawl completed, saving {len(results['pages'])} pages to database")
+#         except Exception as e:
+#             logger.error(f"Error during crawl: {str(e)}", exc_info=True)
+#             crawl_sessions[session_id].update({
+#                 "status": "failed",
+#                 "error": f"Crawl error: {str(e)}",
+#                 "pages": []
+#             })
+#             return
+        
+#         if not results or not results.get('pages'):
+#             logger.error("Crawler returned no results or empty pages")
+#             crawl_sessions[session_id].update({
+#                 "status": "failed",
+#                 "error": "Crawler returned no pages",
+#                 "pages": []
+#             })
+#             return
+        
+#         logger.info(f"Crawl completed, found {len(results['pages'])} pages")
+
+#         # Save results to database
+#         saved_pages = []
+#         try:
+#             for page in results['pages']:
+                
+#                 logger.info(f"Saving page: {page['url']}")
+                
+#                 existing_page = db.query(CrawlerResult).filter(
+#                     CrawlerResult.page_url == page['url'],
+#                     CrawlerResult.word_count == page['word_count'],
+#                     CrawlerResult.batch_id == batch_id,
+#                     CrawlerResult.website_id == website_id,
+#                     CrawlerResult.user_id == user_id
+#                 ).first()
+                
+#                 if not existing_page:
+#                     new_page = CrawlerResult(
+#                         page_url=page['url'],
+#                         title=page['title'],
+#                         meta_description=page['meta_description'],
+#                         h1=page['h1'],
+#                         h2=page['h2'],
+#                         h3=page['h3'],
+#                         body_text=page['body_text'],
+#                         word_count=page['word_count'],
+#                         status=page['status'],
+#                         batch_id=batch_id,
+#                         website_id=website_id,
+#                         user_id=user_id,
+#                         full_text=page['full_text']
+#                     )
+#                     db.add(new_page)
+#                     saved_pages.append(page)
+            
+#             db.commit()
+#             logger.info(f"Crawl task completed, updated session {session_id}")
+#         except Exception as e:
+#             logger.error(f"Error saving pages to database: {str(e)}")
+#             raise
+        
+#         # print("Completed results in run_crawl_task:", results['pages'])
+#         # Update final status
+#         crawl_sessions[session_id].update({
+#             "status": "completed",
+#             "pages": saved_pages,
+#             "statistics": results['statistics'],
+#             "pages_found": len(results['pages']),
+#             "pages_crawled": len(saved_pages)
+#         })
+#         await asyncio.sleep(1)
+#         logger.info(f"Crawl task completed, updated session {session_id}")
+#     except Exception as e:
+#         logger.error(f"Error in run_crawl_task: {str(e)}")
+#         crawl_sessions[session_id].update({
+#             "status": "failed",
+#             "error": str(e)
+#         })
+
 async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_id: str, website_id: int, user_id: int):
     try:
         logger.info(f"Starting crawl task for session {session_id}")
-        
+
         if session_id not in crawl_sessions:
             logger.error(f"Session {session_id} not found in crawl_sessions")
             return
-        
-        # Update status to starting
+
         crawl_sessions[session_id].update({
             "status": "starting",
             "pages_found": 0,
             "pages_crawled": 0,
             "current_url": None,
-            "pages": None
+            "pages": []
         })
-        
-        logger.info("Initializing crawler...")
-        try:
-            results = await crawler.crawl()
-            logger.info(f"Crawl completed, saving {len(results['pages'])} pages to database")
-        except Exception as e:
-            logger.error(f"Error during crawl: {str(e)}", exc_info=True)
-            crawl_sessions[session_id].update({
-                "status": "failed",
-                "error": f"Crawl error: {str(e)}",
-                "pages": []
-            })
-            return
-        
-        if not results or not results.get('pages'):
-            logger.error("Crawler returned no results or empty pages")
-            crawl_sessions[session_id].update({
-                "status": "failed",
-                "error": "Crawler returned no pages",
-                "pages": []
-            })
-            return
-        
-        logger.info(f"Crawl completed, found {len(results['pages'])} pages")
 
-        # Save results to database
+        logger.info("Initializing crawler...")
+
         saved_pages = []
-        try:
-            for page in results['pages']:
-                
-                logger.info(f"Saving page: {page['url']}")
-                
-                existing_page = db.query(CrawlerResult).filter(
-                    CrawlerResult.page_url == page['url'],
-                    CrawlerResult.word_count == page['word_count'],
-                    CrawlerResult.batch_id == batch_id,
-                    CrawlerResult.website_id == website_id,
-                    CrawlerResult.user_id == user_id
+        pages_crawled = 0
+
+        async for page in crawler.crawl():
+            logger.info(f"Saving page: {page['url']}")
+            existing_page = db.query(CrawlerResult).filter(
+                CrawlerResult.page_url == page['url'],
+                CrawlerResult.word_count == page['word_count'],
+                CrawlerResult.batch_id == batch_id,
+                CrawlerResult.website_id == website_id,
+                CrawlerResult.user_id == user_id
                 ).first()
                 
-                if not existing_page:
-                    new_page = CrawlerResult(
-                        page_url=page['url'],
-                        title=page['title'],
-                        meta_description=page['meta_description'],
-                        h1=page['h1'],
-                        h2=page['h2'],
-                        h3=page['h3'],
-                        body_text=page['body_text'],
-                        word_count=page['word_count'],
-                        status=page['status'],
-                        batch_id=batch_id,
-                        website_id=website_id,
-                        user_id=user_id,
-                        full_text=page['full_text']
-                    )
-                    db.add(new_page)
-                    saved_pages.append(page)
-            
-            db.commit()
-            logger.info(f"Crawl task completed, updated session {session_id}")
-        except Exception as e:
-            logger.error(f"Error saving pages to database: {str(e)}")
-            raise
-        
-        # print("Completed results in run_crawl_task:", results['pages'])
-        # Update final status
+            if not existing_page:
+                new_page = CrawlerResult(
+                    page_url=page['url'],
+                    title=page['title'],
+                    meta_description=page['meta_description'],
+                    h1=page['h1'],
+                    h2=page['h2'],
+                    h3=page['h3'],
+                    body_text=page['body_text'],
+                    word_count=page['word_count'],
+                    status=page['status'],
+                    batch_id=batch_id,
+                    website_id=website_id,
+                    user_id=user_id,
+                    full_text=page['full_text']
+                )
+                logger.info(f"About to save page: {new_page.page_url}")
+                db.add(new_page)
+                saved_pages.append(page)
+                db.commit()
+                pages_crawled += 1
+
+            # Update session status after each page
+            crawl_sessions[session_id].update({
+                "status": "in_progress",
+                "pages_found": pages_crawled,  # or use a better estimate if available
+                "pages_crawled": pages_crawled,
+                "current_url": page['url'],
+                "pages": saved_pages[-10:]  # Optionally, only keep the last N pages in memory
+            })
+
+        # Finalize
         crawl_sessions[session_id].update({
             "status": "completed",
             "pages": saved_pages,
-            "statistics": results['statistics'],
-            "pages_found": len(results['pages']),
-            "pages_crawled": len(saved_pages)
+            "statistics": crawler.stats,
+            "pages_found": pages_crawled,
+            "pages_crawled": pages_crawled
         })
         await asyncio.sleep(1)
         logger.info(f"Crawl task completed, updated session {session_id}")
@@ -361,7 +441,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         # Either return the existing user
         return existing_user
-        
+    
     # If user doesn't exist, create new user
     new_user = User(
         email=user.email,
@@ -624,7 +704,7 @@ async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
     logger.info(f"URLs with GSC keyword data: {len(urls_with_keywords)}")
     logger.info(f"URLs without GSC data: {len(unique_crawler_urls - urls_with_keywords)}")
 
-
+    
     # Create a mapping of page_url to content
     page_content = {
         result.page_url: {
@@ -642,36 +722,36 @@ async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
     # Initialize page_analysis for ALL crawled URLs
     page_analysis = {
         url: {
-            'total_impressions': 0,
-            'missing_keywords': [],
-            'present_keywords': [],
-            'total_keywords': 0
-        }
+                'total_impressions': 0,
+                'missing_keywords': [],
+                'present_keywords': [],
+                'total_keywords': 0
+            }
         for url in unique_crawler_urls
     }
     for keyword in keyword_data:
         if keyword.page_url in page_analysis:
             page_analysis[keyword.page_url]['total_impressions'] += keyword.impressions
             page_analysis[keyword.page_url]['total_keywords'] += 1
+        
+        # Check if keyword exists in content
+        if keyword.page_url in page_content:
+            content = page_content[keyword.page_url]
             
-            # Check if keyword exists in content
-            if keyword.page_url in page_content:
-                content = page_content[keyword.page_url]
-                
-                if keyword.keyword.lower() in content['full_text'].lower():
-                    page_analysis[keyword.page_url]['present_keywords'].append({
-                        'keyword': keyword.keyword,
-                        'impressions': keyword.impressions,
-                        'clicks': keyword.clicks,
-                        'position': keyword.average_position
-                    })
-                else:
-                    page_analysis[keyword.page_url]['missing_keywords'].append({
-                        'keyword': keyword.keyword,
-                        'impressions': keyword.impressions,
-                        'clicks': keyword.clicks,
-                        'position': keyword.average_position
-                    })
+            if keyword.keyword.lower() in content['full_text'].lower():
+                page_analysis[keyword.page_url]['present_keywords'].append({
+                    'keyword': keyword.keyword,
+                    'impressions': keyword.impressions,
+                    'clicks': keyword.clicks,
+                    'position': keyword.average_position
+                })
+            else:
+                page_analysis[keyword.page_url]['missing_keywords'].append({
+                    'keyword': keyword.keyword,
+                    'impressions': keyword.impressions,
+                    'clicks': keyword.clicks,
+                    'position': keyword.average_position
+                })
     
     # Sort pages by impressions but include ALL pages
     sorted_pages = sorted(
@@ -768,7 +848,7 @@ async def add_keywords(
         
         if not content:
             raise HTTPException(status_code=404, detail="Content not found")
-        
+
         optimization_data = {
             "original_content": content.full_text,
             "keywords": keywords
@@ -946,7 +1026,7 @@ async def get_optimizations(
             'keywords_used': opt.keywords_used,
             'sources': opt.sources
         } for opt in optimizations]
-
+        
         return {"pages": pages}
 
     except Exception as e:
