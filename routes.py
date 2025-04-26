@@ -320,6 +320,11 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
         pages_crawled = 0
 
         async for page in crawler.crawl():
+            
+            if crawl_sessions[session_id].get("status") == "stopped":
+                logger.info(f"Crawl for session {session_id} was stopped by user.")
+                break
+            
             logger.info(f"Saving page: {page['url']}")
             existing_page = db.query(CrawlerResult).filter(
                 CrawlerResult.page_url == page['url'],
@@ -357,7 +362,7 @@ async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_i
                 "pages_found": pages_crawled,  # or use a better estimate if available
                 "pages_crawled": pages_crawled,
                 "current_url": page['url'],
-                "pages": saved_pages[-10:]  # Optionally, only keep the last N pages in memory
+                "pages": saved_pages
             })
 
         # Finalize
@@ -414,6 +419,7 @@ async def get_crawl_status(session_id: str):
 @router.post("/crawl/stop/{session_id}")
 async def stop_crawl(session_id: str):
     try:
+        logger.info(f"Stopping crawl for session {session_id}")
         if session_id not in crawl_sessions:
             return JSONResponse(
                 status_code=404,
