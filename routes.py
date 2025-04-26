@@ -755,6 +755,7 @@ async def add_keywords(
         
         url = request_data.get("url")
         batch_id = request_data.get("batch_id")
+        keywords = request_data.get("keywords")
         
         if not url or not batch_id:
             raise HTTPException(status_code=400, detail="URL and batch_id are required")
@@ -767,38 +768,10 @@ async def add_keywords(
         
         if not content:
             raise HTTPException(status_code=404, detail="Content not found")
-
-        # Get top 20 keywords for this URL, sorted by impressions
-        keywords = db.query(GSCKeywordData).filter(
-            GSCKeywordData.page_url == url,
-            GSCKeywordData.batch_id == batch_id
-        ).order_by(
-            GSCKeywordData.impressions.desc()
-        ).limit(20).all()
         
-        if not keywords:
-            raise HTTPException(status_code=404, detail="No keywords found for this URL")
-
-        # Filter out keywords that are already present in the content
-        missing_keywords = [
-            {
-                "keyword": kw.keyword,
-                "impressions": kw.impressions,
-                "position": kw.average_position
-            }
-            for kw in keywords
-            if kw.keyword.lower() not in content.full_text.lower()
-        ]
-        
-        logger.debug(f"Missing keywords: {missing_keywords}")
-
-        if not missing_keywords:
-            missing_keywords = []
-
-        # Prepare the data to send to AI service
         optimization_data = {
             "original_content": content.full_text,
-            "keywords": missing_keywords
+            "keywords": keywords
         }
         
         # Send to AI service
