@@ -41,9 +41,11 @@ logger.addHandler(handler)
 logger.info("=== Crawler Logger initialized ===")
 
 class Crawler:
-    def __init__(self, base_url: str, batch_id: str):
+    def __init__(self, base_url: str, batch_id: str, selected_urls=None):
         self.base_url = base_url
         self.batch_id = batch_id
+        self.selected_urls = selected_urls
+        self.only_selected = selected_urls is not None
         self.domain = urlparse(base_url).netloc
         self.url_queue = deque([base_url])
         self.visited_urls: Set[str] = set()
@@ -164,6 +166,9 @@ class Crawler:
 
     async def crawl(self):
         self.stats["start_time"] = datetime.now()
+        if self.selected_urls:  
+            self.url_queue = deque(self.selected_urls)
+            logger.info(f"Starting crawl in crawler.py for with {len(self.url_queue)} selected URLs")
         logger.info(f"Starting crawl in crawler.py for {self.base_url}")
         logger.info(f"Initializing crawler with settings: MAX_WORKERS={settings.MAX_WORKERS}")
         async with async_playwright() as p:
@@ -362,7 +367,8 @@ class Crawler:
             self.stats["successful_pages"] += 1
             
             # Extract and queue new URLs
-            await self.extract_and_queue_urls(soup, current_url)
+            if not self.only_selected:
+                await self.extract_and_queue_urls(soup, current_url)
             logger.info(f"Extracted and queued URLs in process_url in crawler.py")
             return page_data
             

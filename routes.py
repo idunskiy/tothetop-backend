@@ -113,6 +113,17 @@ class CrawlStatus(BaseModel):
     current_url: Optional[str] = None
     pages: Optional[List[PageData]] = None
     
+class CrawlSelectedRequest(BaseModel):
+    urls: List[str]
+    batch_id: str
+    user_id: int
+    website_id: int
+    
+class PageSummary(BaseModel):
+    website: str
+    impressions: int
+    position: float
+    
 crawl_sessions = {}
 ai_service = AIService()
 
@@ -197,6 +208,155 @@ async def crawl_website(request: CrawlRequest, background_tasks: BackgroundTasks
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    
+    
+@router.post("/crawl/selected", response_model=CrawlResponse)
+async def crawl_selected_urls(request: CrawlSelectedRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    try:
+        session_id = str(uuid.uuid4())
+        logger.info(f"Starting selected crawl for session {session_id} with {len(request.urls)} URLs")
+        
+        # Initialize the session
+        crawl_sessions[session_id] = {
+            "status": "starting",
+            "pages_found": len(request.urls),
+            "pages_crawled": 0,
+            "batch_id": request.batch_id,
+            "website_id": request.website_id,
+            "user_id": request.user_id,
+            "current_url": None
+        }
+        
+        # Extract the base domain from the first URL
+        from urllib.parse import urlparse
+        parsed = urlparse(request.urls[0] if request.urls else "")
+        base_domain = f"{parsed.scheme}://{parsed.netloc}"
+        
+        # Create the crawler with the selected URLs
+        logger.info(f"Creating crawler for selected URLs with base domain {base_domain}")
+        crawler = Crawler(base_domain, request.batch_id, selected_urls=request.urls)
+        
+        def update_progress(total_pages, crawled_pages, current_url):
+            crawl_sessions[session_id].update({
+                "status": "in_progress",
+                "pages_found": total_pages,
+                "pages_crawled": crawled_pages,
+                "current_url": current_url
+            })
+        
+        crawler.set_progress_callback(update_progress)
+
+        # Start immediate response with session_id
+        initial_response = {
+            "session_id": session_id,
+            "pages": [],
+            "statistics": {}
+        }
+        
+        # Start the crawl in background - using the same pattern as run_crawl_task
+        background_tasks.add_task(
+            run_crawl_selected_task,
+            crawler=crawler,
+            session_id=session_id,
+            db=db,
+            batch_id=request.batch_id,
+            website_id=request.website_id,
+            user_id=request.user_id
+        )
+        
+        logger.info(f"Initial response for selected crawl: {initial_response}")
+        return initial_response
+
+    except Exception as e:
+        logger.error(f"Error in crawl_selected_urls: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+async def run_crawl_selected_task(crawler: Crawler, session_id: str, db: Session, batch_id: str, 
+                                  website_id: int, user_id: int):
+    try:
+        logger.info(f"Starting selected crawl task for session {session_id}")
+
+        if session_id not in crawl_sessions:
+            logger.error(f"Session {session_id} not found in crawl_sessions")
+            return
+
+        crawl_sessions[session_id].update({
+            "status": "starting",
+            "pages_found": len(crawler.selected_urls) if crawler.selected_urls else 0,
+            "pages_crawled": 0,
+            "current_url": None,
+            "pages": []
+        })
+
+        logger.info("Initializing crawler...")
+
+        saved_pages = []
+        pages_crawled = 0
+
+        # Use crawler.crawl() just like in run_crawl_task
+        async for page in crawler.crawl():
+            if crawl_sessions[session_id].get("status") == "stopped":
+                logger.info(f"Crawl for session {session_id} was stopped by user.")
+                break
+            
+            logger.info(f"Saving page: {page['url']}")
+            existing_page = db.query(CrawlerResult).filter(
+                    CrawlerResult.page_url == page['url'],
+                    CrawlerResult.word_count == page['word_count'],
+            CrawlerResult.batch_id == batch_id,
+            CrawlerResult.website_id == website_id,
+            CrawlerResult.user_id == user_id
+                ).first()
+                
+            if not existing_page:
+                new_page = CrawlerResult(
+                    page_url=page['url'],
+                    title=page['title'],
+                    meta_description=page['meta_description'],
+                    h1=page['h1'],
+                    h2=page['h2'],
+                    h3=page['h3'],
+                    body_text=page['body_text'],
+                    word_count=page['word_count'],
+                    status=page['status'],
+                    batch_id=batch_id,
+                    website_id=website_id,
+                    user_id=user_id,
+                    full_text=page['full_text']
+                )
+                logger.info(f"About to save page: {new_page.page_url}")
+                db.add(new_page)
+                saved_pages.append(page)
+                db.commit()
+                pages_crawled += 1
+
+            # Update session status after each page
+            crawl_sessions[session_id].update({
+                "status": "in_progress",
+                "pages_found": len(crawler.selected_urls) if crawler.selected_urls else pages_crawled,
+                "pages_crawled": pages_crawled,
+                "current_url": page['url'],
+                "pages": saved_pages
+            })
+
+        # Finalize
+        crawl_sessions[session_id].update({
+            "status": "completed",
+            "pages": saved_pages,
+            "statistics": crawler.stats,
+            "pages_found": len(crawler.selected_urls) if crawler.selected_urls else pages_crawled,
+            "pages_crawled": pages_crawled
+        })
+        await asyncio.sleep(1)
+        logger.info(f"Selected crawl task completed, updated session {session_id}")
+    except Exception as e:
+        logger.error(f"Error in run_crawl_selected_task: {str(e)}")
+        crawl_sessions[session_id].update({
+            "status": "failed",
+            "error": str(e)
+        })
     
 # Old implemneta tion of crawl task - save to database after everything is crawled
 # async def run_crawl_task(crawler: Crawler, session_id: str, db: Session, batch_id: str, website_id: int, user_id: int):
@@ -547,6 +707,27 @@ def create_gsc_page_data(data: GSCPageDataCreate, db: Session = Depends(get_db))
     db.commit()
     db.refresh(existing)
     return existing
+
+
+# GSC Page Data endpoints
+@router.get("/gsc/get-pages/{batch_id}", response_model=List[PageSummary])
+def get_gsc_page_data(batch_id: str, db: Session = Depends(get_db)):
+    
+    # Debug prints
+    pages = db.query(GSCPageData).filter(
+        GSCPageData.batch_id == batch_id
+    ).all()
+    
+    # Transform to the desired JSON structure
+    result = [
+        {
+            "website": page.page_url,  # or use .url if that's the field name
+            "impressions": getattr(page, "impressions", 0),
+            "position": getattr(page, "position", getattr(page, "average_position", 0))
+        }
+        for page in pages
+    ]
+    return result
 
 @router.get("/gsc/page-data/{website_id}", response_model=List[GSCPageDataSchema])
 def get_website_page_data(website_id: int, db: Session = Depends(get_db)):

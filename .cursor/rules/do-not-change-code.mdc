@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- Do not change randomly code in [routes.py](mdc:tothetop-backend/tothetop-backend/routes.py). Only with my persmission.
+
