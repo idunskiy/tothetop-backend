@@ -197,8 +197,8 @@ class Crawler:
                     for page in results:
                         if page:  # Only yield valid pages
                             yield page
-        await self.browser.close()
-        logger.info("Browser closed successfully")
+            await self.browser.close()
+            logger.info("Browser closed successfully")
         self.stats["end_time"] = datetime.now()
         self.stats["parse_time_seconds"] = (self.stats["end_time"] - self.stats["start_time"]).total_seconds()
         self.stats["total_pages_found"] = len(self.processed_urls) + len(self.url_queue)
@@ -216,7 +216,7 @@ class Crawler:
             
     #         self.last_request_time = time.time()
     #         await self.process_url(url, client)
-    
+
     async def process_url_with_semaphore(self, url: str, client: httpx.AsyncClient):
         """Process URL with semaphore for concurrency control"""
         async with self.semaphore:
@@ -309,7 +309,7 @@ class Crawler:
     #             except ValueError:
     #                 pass  # Semaphore was already released
     
-    
+
     async def process_url(self, url: str, client: httpx.AsyncClient) -> None:
         """Process a single URL and extract its content."""
         current_url = self.normalize_url(url)
@@ -321,11 +321,11 @@ class Crawler:
         
         if current_url in self.processed_urls:
             return
-        
+            
         if not self.is_allowed(current_url):
             logger.info(f"Skip: URL not allowed in process_url in crawler.py: {current_url}")
             return
-        
+            
         try:
             self.processed_urls.add(current_url)
             self.stats["pages_parsed"] += 1

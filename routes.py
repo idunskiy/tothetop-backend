@@ -322,8 +322,8 @@ async def run_crawl_selected_task(crawler: Crawler, session_id: str, db: Session
                     word_count=page['word_count'],
                     status=page['status'],
                     batch_id=batch_id,
-                    website_id=website_id,
-                    user_id=user_id,
+                website_id=website_id,
+                user_id=user_id,
                     full_text=page['full_text']
                 )
                 logger.info(f"About to save page: {new_page.page_url}")
@@ -863,19 +863,21 @@ def get_user_last_batch(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/analysis/{batch_id}")
-async def get_batch_analysis(batch_id: str, db: Session = Depends(get_db)):
-    def normalize_url(url: str) -> str:
-        """Normalize URL to ensure consistent matching"""
-        url = url.lower()
-        url = url.rstrip('/')
-        if url.startswith('http://'):
-            url = 'https://' + url[7:]
-        return url
+async def get_batch_analysis(batch_id: str, 
+                             email: str = Query(..., description="User email"),
+                             db: Session = Depends(get_db)):
+    
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
     # Get crawler results for this batch
-    crawler_results = db.query(CrawlerResult).filter(
-        CrawlerResult.batch_id == batch_id
-    ).all()
+    crawler_results = db.query(CrawlerResult)\
+        .join(Website, CrawlerResult.website_id == Website.id)\
+        .filter(
+            CrawlerResult.batch_id == batch_id,
+            Website.user_id == user.id  # Only get results for user's websites
+        ).all()
     
     logger.info(f"Crawler results: {len(crawler_results)}")
     unique_crawler_urls = set(cr.page_url for cr in crawler_results)

@@ -17,12 +17,19 @@ class User(Base):
     google_id = Column(String(255), unique=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # Add relationships with cascade
+    websites = relationship('Website', backref='user', cascade='all, delete-orphan')
+    gsc_page_data = relationship('GSCPageData', backref='user', cascade='all, delete-orphan')
+    gsc_keyword_data = relationship('GSCKeywordData', backref='user', cascade='all, delete-orphan')
+    crawler_results = relationship('CrawlerResult', backref='user', cascade='all, delete-orphan')
+    page_optimizations = relationship('PageOptimization', backref='user', cascade='all, delete-orphan')
 
 class Website(Base):
     __tablename__ = 'websites'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     domain = Column(String(255), nullable=False)
     is_verified = Column(Boolean, default=False)
     verification_method = Column(String(50))
@@ -33,8 +40,8 @@ class GSCPageData(Base):
     __tablename__ = 'gsc_page_data'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    website_id = Column(Integer, ForeignKey('websites.id'))
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    website_id = Column(Integer, ForeignKey('websites.id', ondelete='CASCADE'), nullable=False)
     page_url = Column(Text, nullable=False)
     clicks = Column(Integer, default=0)
     impressions = Column(Integer, default=0)
@@ -53,8 +60,8 @@ class GSCKeywordData(Base):
     __tablename__ = 'gsc_keyword_data'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    website_id = Column(Integer, ForeignKey('websites.id'))
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    website_id = Column(Integer, ForeignKey('websites.id', ondelete='CASCADE'), nullable=False)
     page_url = Column(Text, nullable=False)
     keyword = Column(Text, nullable=False)
     clicks = Column(Integer, default=0)
@@ -74,8 +81,8 @@ class CrawlerResult(Base):
     __tablename__ = 'crawler_results'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    website_id = Column(Integer, ForeignKey('websites.id'))
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    website_id = Column(Integer, ForeignKey('websites.id', ondelete='CASCADE'), nullable=False)
     page_url = Column(Text, nullable=False)
     title = Column(Text)
     meta_description = Column(Text)
@@ -89,15 +96,13 @@ class CrawlerResult(Base):
     status = Column(String(50))
     batch_id = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    website_id = Column(Integer, ForeignKey('websites.id'))
-    user_id = Column(Integer, ForeignKey('users.id'))
-
+    
     
 class PageOptimization(Base):
     __tablename__ = 'page_optimizations'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     url = Column(Text, nullable=False)
     optimization_type = Column(Text, nullable=False)  # 'add_keywords' or 'optimize_section'
     summary = Column(Text, nullable=False)
@@ -113,6 +118,3 @@ class PageOptimization(Base):
         Index('idx_page_optimizations_user_url', 'user_id', 'url'),
         Index('idx_page_optimizations_created_at', 'created_at'),
     )
-
-    # Relationship to User model
-    user = relationship('User', backref='page_optimizations')
