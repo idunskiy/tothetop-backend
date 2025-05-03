@@ -1253,3 +1253,8 @@ async def get_optimization_detail(
     except Exception as e:
         logger.error(f"Error in get_optimization_detail: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 
+    
+@router.get("/sentry-backend-test")
+async def trigger_error():
+    division_by_zero = 1 / 0
+    return {"message": "This will be logged to Sentry"}

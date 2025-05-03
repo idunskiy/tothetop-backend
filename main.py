@@ -1,6 +1,14 @@
 from fastapi import FastAPI
 from routes import router 
 from fastapi.middleware.cors import CORSMiddleware
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn="https://dc0260d3735294b05abf5d52cf32c9ba@o4509202438946816.ingest.de.sentry.io/4509257149579344",
+    # Add data like request headers and IP for users,
+    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+    send_default_pii=True,
+)
 
 app = FastAPI(
     title="Tothetop.ai SEO Crawler",
