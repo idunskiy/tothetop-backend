@@ -181,11 +181,11 @@ class AIService:
         logger.debug(f"Processing intent with data: {intent_data}")
         return self.process_event('intent', intent_data, timeout)
     
-    def add_keywords(self, optimization_data: Dict[str, Any], timeout: int = 120) -> Optional[dict]:
+    def add_keywords(self, optimization_data: Dict[str, Any], timeout: int = 300) -> Optional[dict]:
         """Optimize content"""
         return self.process_event('add_keywords', optimization_data, timeout)
     
-    def optimize_section(self, optimization_data: Dict[str, Any], timeout: int = 120) -> Optional[dict]:
+    def optimize_section(self, optimization_data: Dict[str, Any], timeout: int = 300) -> Optional[dict]:
         """Optimize content"""
         return self.process_event('optimize_section', optimization_data, timeout)
 

@@ -1257,4 +1257,4 @@ async def get_optimization_detail(
 @router.get("/sentry-backend-test")
 async def trigger_error():
     division_by_zero = 1 / 0
-    return {"message": "This will be logged to Sentry"}
+    return {"mesdockesage": "This will be logged to Sentry"}
