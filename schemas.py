@@ -7,7 +7,7 @@ class UserBase(BaseModel):
     email: EmailStr
     name: Optional[str] = None
     google_id: Optional[str] = None
-
+    google_refresh_token: Optional[str] = None
 class UserCreate(UserBase):
     pass
 

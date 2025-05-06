@@ -29,6 +29,8 @@ import os
 import time
 import sys
 from fastapi import BackgroundTasks
+from config import settings
+
 router = APIRouter()
 
 
@@ -605,14 +607,17 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     # First check if user exists
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
-        # Either return the existing user
+        if user.google_refresh_token:
+            existing_user.google_refresh_token = user.google_refresh_token
+            db.commit()
         return existing_user
     
     # If user doesn't exist, create new user
     new_user = User(
         email=user.email,
         name=user.name,
-        google_id=user.google_id
+        google_id=user.google_id,
+        google_refresh_token=user.google_refresh_token
     )
     db.add(new_user)
     db.commit()
@@ -624,6 +629,13 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+@router.get("/users/{user_id}/refresh-token")
+def get_user_refresh_token(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"refresh_token": user.google_refresh_token}
 
 # Website endpoints
 @router.post("/websites/", response_model=WebsiteSchema)
@@ -1164,6 +1176,8 @@ async def save_optimization(
         
         db.add(new_optimization)
         db.commit()
+        user.optimized_pages_count = (user.optimized_pages_count or 0) + 1
+        db.commit()
         
         return {
             "id": new_optimization.id,
@@ -1258,3 +1272,18 @@ async def get_optimization_detail(
 async def trigger_error():
     division_by_zero = 1 / 0
     return {"mesdockesage": "This will be logged to Sentry"}
+
+@router.get("/trial-optimization-status")
+async def trial_optimization_status(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    TRIAL_OPTIMIZATION_LIMIT = settings.TRIAL_OPTIMIZATION_LIMIT
+    if user.subscription_type == 'alpha':
+        TRIAL_OPTIMIZATION_LIMIT = 50
+    return {
+        "optimized_pages_count": user.optimized_pages_count or 0,
+        "trial_limit": TRIAL_OPTIMIZATION_LIMIT,
+        "limit_reached": (user.optimized_pages_count or 0) >= TRIAL_OPTIMIZATION_LIMIT,
+        "subscription_type": user.subscription_type
+    }

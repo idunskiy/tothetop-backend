@@ -15,8 +15,11 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False)
     name = Column(String(255))
     google_id = Column(String(255), unique=True)
+    google_refresh_token = Column(String(512))
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    subscription_type = Column(String(255), default='trial')
+    optimized_pages_count = Column(Integer, default=0)
     
     # Add relationships with cascade
     websites = relationship('Website', backref='user', cascade='all, delete-orphan')

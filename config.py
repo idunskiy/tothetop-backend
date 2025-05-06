@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     db_port: str
     db_name: str
     
+    # Google settings
+    google_client_id: str
+    google_client_secret: str
+    
     # RabbitMQ settings
     project_name: str
     rabbitmq_host: str
@@ -33,6 +37,9 @@ class Settings(BaseSettings):
     
     # Browser settings for Playwright
     PLAYWRIGHT_TIMEOUT: int = 30000  # 30 seconds
+    
+    # Trial optimization limit
+    TRIAL_OPTIMIZATION_LIMIT: int = 2
     
     class Config:
         env_file = ".env"
