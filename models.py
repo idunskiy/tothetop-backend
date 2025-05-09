@@ -20,6 +20,8 @@ class User(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     subscription_type = Column(String(255), default='trial')
     optimized_pages_count = Column(Integer, default=0)
+    pages_limit = Column(Integer, default=2)
+    purchase_date = Column(DateTime)
     
     # Add relationships with cascade
     websites = relationship('Website', backref='user', cascade='all, delete-orphan')

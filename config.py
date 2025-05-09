@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     # Trial optimization limit
     TRIAL_OPTIMIZATION_LIMIT: int = 2
     
+    HOST_SANDBOX: str = 'https://sandbox-api.paddle.com/'
+    HOST_PROD: str = 'https://api.paddle.com/'
+    
+    HOST_FRONTEND_PROD: str = 'https://tothetop.cloud'
+    HOST_FRONTEND_DEV: str = 'http://localhost:3000'
+
+    API_KEY_SANDBOX: str = 'pdl_sdbx_apikey_01jtsdk6kv7vqzskx1k9tbcwf6_Crt0tpQr4k9jv12x0tJ5XR_AP2'
+    API_KEY_PROD: str = '4f0d4f75a55b2bc54354911db310c33a945a36bc74ba239475'
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -30,7 +30,7 @@ import time
 import sys
 from fastapi import BackgroundTasks
 from config import settings
-
+import httpx
 router = APIRouter()
 
 
@@ -617,7 +617,9 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         name=user.name,
         google_id=user.google_id,
-        google_refresh_token=user.google_refresh_token
+        google_refresh_token=user.google_refresh_token,
+        subscription_type='trial',
+        pages_limit=2
     )
     db.add(new_user)
     db.commit()
@@ -1283,7 +1285,114 @@ async def trial_optimization_status(email: str, db: Session = Depends(get_db)):
         TRIAL_OPTIMIZATION_LIMIT = 50
     return {
         "optimized_pages_count": user.optimized_pages_count or 0,
-        "trial_limit": TRIAL_OPTIMIZATION_LIMIT,
-        "limit_reached": (user.optimized_pages_count or 0) >= TRIAL_OPTIMIZATION_LIMIT,
+        "pages_limit": user.pages_limit,
+        "limit_reached": (user.optimized_pages_count or 0) >= (user.pages_limit or 0),
         "subscription_type": user.subscription_type
     }
+    
+@router.post("/paddle/webhook")
+async def paddle_webhook(request: Request, db: Session = Depends(get_db)):
+    # Retrieve JSON payload
+    payload = await request.json()  
+    print(f'Paddle payload: {payload}')
+
+    # Check if the event type is transaction.completed
+    if payload.get('event_type') == 'transaction.completed':
+        # Extract customer ID
+        customer_id = payload.get('data', {}).get('customer_id')
+        print(f'Paddle customer ID: {customer_id}')
+        line_items = payload.get('data', {}).get('details', {}).get('line_items', [])
+        product_name = None
+        if line_items:
+            product_name = line_items[0].get('product', {}).get('name')
+
+        print(f'Customer ID: {customer_id}, Product Name: {product_name}')
+
+        # Initialize customer_email
+        customer_email = None
+
+        # Call Paddle API to get customer details
+        async with httpx.AsyncClient() as client:
+            headers = {'Authorization': f'Bearer {settings.API_KEY_PROD}'}
+            response = await client.get(f'{settings.HOST_PROD}customers/{customer_id}', headers=headers)
+            if response.status_code == 200:
+                customer_data = response.json()
+                customer_email = customer_data.get('data', {}).get('email')
+                print(f'Customer Email within async block: {customer_email}')
+            else:
+                print(f'Failed to retrieve customer data: Status code {response.status_code}')
+
+        # customer_email is now accessible here
+        if customer_email:
+            print(f'Customer Email outside async block: {customer_email}')
+
+        user = db.query(User).filter_by(email=customer_email).first()
+
+        if user is not None:
+            # Update the user's subscription status or other relevant data
+            user.subscription_type = product_name
+            user.purchase_date = datetime.utcnow()
+
+
+            if user.subscription_type == 'Tothetop-Starter':
+                user.pages_limit = 50
+            elif user.subscription_type == 'Tothetop-Pro':
+                user.pages_limit = 100
+            elif user.subscription_type == 'Tothetop-Agency':
+                user.pages_limit = 200
+            # elif user.subscription_type == 'Basic-annual-plagiarism':
+            #     user.plagiarism_word_count = 240000
+            #     user.ai_text_word_count = 180000
+            #     user.humanize_word_count = 180000
+            # elif user.subscription_type == 'Advanced-annual-plagiarism':
+            #     user.plagiarism_word_count = 500000
+            #     user.ai_text_word_count = 400000
+            #     user.humanize_word_count = 300000
+            # elif user.subscription_type == 'Professional-annual-plagiarism':
+            #     user.plagiarism_word_count = 1000000
+            #     user.ai_text_word_count = 800000
+            #     user.humanize_word_count = 600000
+
+            db.commit()
+
+            print(
+                f'Paddle: User {customer_email} upgraded to {product_name} subscription with {user.pages_limit} pages limit')
+            return {"success": True}
+        # else:
+        #     # If the user doesn't exist, create a new user
+        #     new_user = User(email=customer_email, subscription_type=product_name,
+        #                     purchase_date=datetime.utcnow())
+
+        #     if new_user.subscription_type == 'Basic-monthly-plagiarism':
+        #         new_user.plagiarism_word_count = 20000
+        #         new_user.ai_text_word_count = 15000
+        #         new_user.humanize_word_count = 15000
+        #     elif new_user.subscription_type == 'Advanced-monthly-plagiarism':
+        #         new_user.plagiarism_word_count = 40000
+        #         new_user.ai_text_word_count = 30000
+        #         new_user.humanize_word_count = 20000
+        #     elif new_user.subscription_type == 'Professional-monthly-plagiarism':
+        #         new_user.plagiarism_word_count = 80000
+        #         new_user.ai_text_word_count = 60000
+        #         new_user.humanize_word_count = 30000
+        #     elif new_user.subscription_type == 'Basic-annual-plagiarism':
+        #         new_user.plagiarism_word_count = 240000
+        #         new_user.ai_text_word_count = 180000
+        #         new_user.humanize_word_count = 180000
+        #     elif new_user.subscription_type == 'Advanced-annual-plagiarism':
+        #         new_user.plagiarism_word_count = 500000
+        #         new_user.ai_text_word_count = 400000
+        #         new_user.humanize_word_count = 300000
+        #     elif new_user.subscription_type == 'Professional-annual-plagiarism':
+        #         new_user.plagiarism_word_count = 1000000
+        #         new_user.ai_text_word_count = 800000
+        #         new_user.humanize_word_count = 600000
+        #     db.add(new_user)
+        #     db.commit()
+        #     print(
+        #         f'Paddle: New user {customer_email} created with {product_name} subscription with {user.plagiarism_word_count} '
+        #         f'words on plagiarism and {user.ai_text_word_count} words on ai generated text')
+        #     return {"success": True}
+
+    # Responding within 5 seconds
+    # return {"success": True}
