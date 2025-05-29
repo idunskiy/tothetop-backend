@@ -1396,3 +1396,29 @@ async def paddle_webhook(request: Request, db: Session = Depends(get_db)):
 
     # Responding within 5 seconds
     # return {"success": True}
+    
+@router.get("/get-crawled-content")
+async def get_crawled_content(
+    url: str = Query(..., description="The URL of the crawled page"),
+    batch_id: str = Query(..., description="The batch ID of the crawl"),
+    db: Session = Depends(get_db)
+):
+    try:
+        # Get the crawler result with the content
+        content = db.query(CrawlerResult).filter(
+            CrawlerResult.page_url == url,
+            CrawlerResult.batch_id == batch_id
+        ).first()
+        
+        if not content:
+            raise HTTPException(status_code=404, detail="Content not found")
+
+        return {
+            "content": content.full_text,
+            "word_count": content.word_count,
+            "status": content.status
+        }
+
+    except Exception as e:
+        logger.error(f"Error in get_crawled_content: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

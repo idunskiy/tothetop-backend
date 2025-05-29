@@ -351,8 +351,6 @@ class Crawler:
             # Try basic parsing first
             response = await client.get(current_url)
             soup = BeautifulSoup(response.text, 'html.parser')
-            page_data = await self.extract_content_basic(soup, current_url)
-            
             # Extract content using basic parsing
             page_data = await self.extract_content_basic(soup, current_url)
             
@@ -420,19 +418,234 @@ class Crawler:
         
         return text.strip()
 
-    async def extract_content_basic(self, soup: BeautifulSoup, url: str) -> Dict:
-        """Extract content using basic HTML parsing."""
-        # Remove unwanted elements
-        for element in soup.find_all(['script', 'style', 'nav', 'footer', 'iframe', 'form']):
-            element.decompose()
+    # async def extract_content_basic(self, soup: BeautifulSoup, url: str) -> Dict:
+    #     """Extract content using basic HTML parsing."""
+    #     # Remove unwanted elements
+    #     for element in soup.find_all(['script', 'style', 'nav', 'footer', 'iframe', 'form']):
+    #         element.decompose()
         
+    #     # Get basic metadata
+    #     title = soup.title.string if soup.title else None
+    #     meta_desc = soup.find("meta", {"name": "description"})
+    #     meta_description = meta_desc.get("content") if meta_desc else None
+        
+    #     structured_content = []
+    #     seen_content = set()  # Track unique content to avoid duplicates
+        
+    #     if title:
+    #         structured_content.append({
+    #             'type': 'title',
+    #             'content': title,
+    #             'tag': 'title'
+    #         })
+    #         seen_content.add(title)
+        
+    #     if meta_description:
+    #         structured_content.append({
+    #             'type': 'meta',
+    #             'content': meta_description,
+    #             'tag': 'meta'
+    #         })
+    #         seen_content.add(meta_description)
+
+    #     def process_element(element):
+    #         # Handle NavigableString objects
+    #         if isinstance(element, (str, NavigableString)):
+    #             return
+
+    #         # Skip comments
+    #         if isinstance(element, Comment):
+    #             return
+
+    #         # Skip unwanted elements
+    #         if element.name in ['script', 'style', 'nav', 'footer', 'iframe', 'form', 'button', 'input']:
+    #             return
+
+    #         # Skip elements with unwanted classes
+    #         skip_classes = {'hidden', 'nav', 'menu', 'footer', 'header', 'sidebar', 'modal', 'dialog', 'popup'}
+    #         if element.get('class'):
+    #             if any(cls.lower() in skip_classes for cls in element.get('class')):
+    #                 return
+
+    #         # Skip elements with unwanted text
+    #         skip_texts = {'====== Navbar Section', '====== Hero Section'}
+    #         text = self.clean_text(element.get_text())
+    #         if any(skip_text in text for skip_text in skip_texts):
+    #             return
+
+    #         # Process content based on tag type
+    #         if text and text not in seen_content:  # Only process if text is unique
+    #             if element.name == 'h1':
+    #                 structured_content.append({
+    #                     'type': 'heading',
+    #                     'level': 1,
+    #                     'content': text,
+    #                     'tag': 'h1'
+    #                 })
+    #                 seen_content.add(text)
+                
+    #             elif element.name == 'h2':
+    #                 structured_content.append({
+    #                     'type': 'heading',
+    #                     'level': 2,
+    #                     'content': text,
+    #                     'tag': 'h2'
+    #                 })
+    #                 seen_content.add(text)
+                
+    #             elif element.name in ['h3', 'h4']:
+    #                 structured_content.append({
+    #                     'type': 'heading',
+    #                     'level': 3,
+    #                     'content': text,
+    #                     'tag': 'h3'
+    #                 })
+    #                 seen_content.add(text)
+                
+    #             elif element.name == 'p':
+    #                 structured_content.append({
+    #                     'type': 'paragraph',
+    #                     'content': text,
+    #                     'tag': 'p'
+    #                 })
+    #                 seen_content.add(text)
+                
+    #             elif element.name in ['ul', 'ol']:
+    #                 list_items = []
+    #                 # Find all li elements, including those nested in spans
+    #                 for li in element.find_all('li', class_='mshfa-features__item-li'):  # Add class filter
+    #                     li_text = self.clean_text(li.get_text())
+    #                     if li_text and li_text not in seen_content:
+    #                         list_items.append(li_text)
+    #                         seen_content.add(li_text)
+                    
+    #                 # If no items found with class, try without class filter
+    #                 if not list_items:
+    #                     for li in element.find_all('li'):
+    #                         li_text = self.clean_text(li.get_text())
+    #                         if li_text and li_text not in seen_content:
+    #                             list_items.append(li_text)
+    #                             seen_content.add(li_text)
+                    
+    #                 if list_items:
+    #                     # Also capture the list title if present
+    #                     list_title = None
+    #                     title_elem = element.find_previous_sibling('p', class_='mshfa-features__item-title')
+    #                     if title_elem:
+    #                         list_title = self.clean_text(title_elem.get_text())
+                        
+    #                     structured_content.append({
+    #                         'type': 'list',
+    #                         'title': list_title,  # Add title to the list structure
+    #                         'items': list_items,
+    #                         'tag': element.name
+    #                     })
+
+    #         # Process children only for container elements
+    #         if element.name in ['div', 'section', 'article', 'main', 'body', 'span']: 
+    #             for child in element.children:
+    #                 process_element(child)
+
+    #     # Start processing from body
+    #     if soup.body:
+    #         process_element(soup.body)
+
+    #     # Create full_text while preserving structure
+    #     full_text_parts = []
+    #     h1_text = None
+    #     h2_tags = []
+    #     h3_tags = []
+        
+    #     for item in structured_content:
+    #         if item['type'] == 'title':
+    #             full_text_parts.append(f"[TITLE_START]\n{item['content']}\n[TITLE_END]")
+    #         elif item['type'] == 'meta':
+    #             full_text_parts.append(f"[META_START]\n{item['content']}\n[META_END]")
+    #         elif item['type'] == 'heading':
+    #             if item['level'] == 1:
+    #                 h1_text = item['content']
+    #                 full_text_parts.append(f"[H1_START]\n{item['content']}\n[H1_END]")
+    #             elif item['level'] == 2:
+    #                 h2_tags.append(item['content'])
+    #                 full_text_parts.append(f"[H2_START]\n{item['content']}\n[H2_END]")
+    #             elif item['level'] == 3:
+    #                 h3_tags.append(item['content'])
+    #                 full_text_parts.append(f"[H3_START]\n{item['content']}\n[H3_END]")
+    #         elif item['type'] == 'paragraph':
+    #             full_text_parts.append(f"[P_START]\n{item['content']}\n[P_END]")
+    #         elif item['type'] == 'list':
+    #             if item.get('title'):
+    #                 full_text_parts.append(f"[P_START]\n{item['title']}\n[P_END]")
+    #             list_text = "\n".join(f"• {list_item}" for list_item in item['items'])
+    #             full_text_parts.append(f"[LIST_START]\n{list_text}\n[LIST_END]")
+        
+    #     # Join parts and calculate word count safely
+    #     try:
+    #         full_text = "\n\n".join(full_text_parts)
+    #         # Calculate word count from all text content
+    #         word_count = sum(len(item.get('content', '').split()) for item in structured_content)
+    #         word_count += sum(len(item.get('items', [])) for item in structured_content if item['type'] == 'list')
+    #     except Exception as e:
+    #         print(f"Error processing text: {e}")
+    #         full_text = ""
+    #         word_count = 0
+
+    #     # Get body text using trafilatura
+    #     try:
+    #         body_text = trafilatura.extract(str(soup)) or ""
+    #     except Exception as e:
+    #         print(f"Error extracting body text: {e}")
+    #         body_text = ""
+            
+    #     result = {
+    #         "url": url,
+    #         "title": title,
+    #         "meta_description": meta_description,
+    #         "h1": h1_text,
+    #         "h2": h2_tags,
+    #         "h3": h3_tags,
+    #         "body_text": body_text,
+    #         "full_text": full_text,
+    #         "word_count": word_count,
+    #         "parse_method": "basic",
+    #         "status": "partial" if word_count < settings.MIN_WORD_COUNT else "success"
+    #     }
+        
+    #     logger.info(f"Result in extract_content_basic in crawler.py: {result}")
+
+    #     return result
+    
+    async def extract_content_basic(self, soup: BeautifulSoup, url: str) -> Dict:
         # Get basic metadata
-        title = soup.title.string if soup.title else None
+        title = None
+        if soup.title and soup.title.string:
+            title = soup.title.string.strip()
+        
         meta_desc = soup.find("meta", {"name": "description"})
         meta_description = meta_desc.get("content") if meta_desc else None
+        logger.info(f"Title in extract_content_basic in crawler.py: {title}")
+        logger.info(f"Meta description in extract_content_basic in crawler.py: {meta_description}")
         
+        # Get the main content using trafilatura
+        try:
+            main_content = trafilatura.extract(str(soup)) or ""
+            logger.info(f"Main content in extract_content_basic in crawler.py: {main_content}")
+            # Get the main content element that trafilatura identified
+            main_element = trafilatura.extract(str(soup), output_format='element')
+            if main_element:
+                # Convert the lxml element to BeautifulSoup
+                main_soup = BeautifulSoup(main_element, 'html.parser')
+                logger.info(f"Main soup in extract_content_basic in crawler.py: {main_soup}")
+            else:
+                main_soup = soup  # Fallback to original soup
+        except Exception as e:
+            print(f"Error extracting main content: {e}")
+            main_content = ""
+            main_soup = soup
+
+        # Now we need to map the trafilatura content to the original structure
         structured_content = []
-        seen_content = set()  # Track unique content to avoid duplicates
+        seen_content = set()
         
         if title:
             structured_content.append({
@@ -441,7 +654,7 @@ class Crawler:
                 'tag': 'title'
             })
             seen_content.add(title)
-        
+    
         if meta_description:
             structured_content.append({
                 'type': 'meta',
@@ -451,32 +664,47 @@ class Crawler:
             seen_content.add(meta_description)
 
         def process_element(element):
-            # Handle NavigableString objects
-            if isinstance(element, (str, NavigableString)):
-                return
-
-            # Skip comments
-            if isinstance(element, Comment):
+            if isinstance(element, (str, NavigableString)) or isinstance(element, Comment):
                 return
 
             # Skip unwanted elements
             if element.name in ['script', 'style', 'nav', 'footer', 'iframe', 'form', 'button', 'input']:
                 return
 
-            # Skip elements with unwanted classes
-            skip_classes = {'hidden', 'nav', 'menu', 'footer', 'header', 'sidebar', 'modal', 'dialog', 'popup'}
-            if element.get('class'):
-                if any(cls.lower() in skip_classes for cls in element.get('class')):
-                    return
-
-            # Skip elements with unwanted text
-            skip_texts = {'====== Navbar Section', '====== Hero Section'}
+            # Get the text content
             text = self.clean_text(element.get_text())
-            if any(skip_text in text for skip_text in skip_texts):
+            if not text or text in seen_content:
                 return
+            
+            # Handle lists separately since they need special processing
+            if element.name in ['ul', 'ol']:
+                list_items = []
+                for li in element.find_all('li', recursive=False):
+                    li_text = self.clean_text(li.get_text())
+                    if li_text and li_text not in seen_content:
+                        list_items.append(li_text)
+                        seen_content.add(li_text)
+                
+                if list_items:
+                    list_title = None
+                    # Look for a title in previous siblings
+                    for prev in element.find_previous_siblings(['p', 'h1', 'h2', 'h3', 'h4']):
+                        title_text = self.clean_text(prev.get_text())
+                        if title_text and title_text not in seen_content:
+                            list_title = title_text
+                            seen_content.add(title_text)
+                            break
+                    
+                    structured_content.append({
+                        'type': 'list',
+                        'title': list_title,
+                        'items': list_items,
+                        'tag': element.name
+                    })
+                return  # Skip processing children for lists
 
-            # Process content based on tag type
-            if text and text not in seen_content:  # Only process if text is unique
+            # Check if this text exists in the trafilatura content
+            if text in main_content:
                 if element.name == 'h1':
                     structured_content.append({
                         'type': 'heading',
@@ -485,7 +713,6 @@ class Crawler:
                         'tag': 'h1'
                     })
                     seen_content.add(text)
-                
                 elif element.name == 'h2':
                     structured_content.append({
                         'type': 'heading',
@@ -494,7 +721,6 @@ class Crawler:
                         'tag': 'h2'
                     })
                     seen_content.add(text)
-                
                 elif element.name in ['h3', 'h4']:
                     structured_content.append({
                         'type': 'heading',
@@ -503,56 +729,37 @@ class Crawler:
                         'tag': 'h3'
                     })
                     seen_content.add(text)
-                
                 elif element.name == 'p':
-                    structured_content.append({
-                        'type': 'paragraph',
-                        'content': text,
-                        'tag': 'p'
-                    })
-                    seen_content.add(text)
-                
-                elif element.name in ['ul', 'ol']:
-                    list_items = []
-                    # Find all li elements, including those nested in spans
-                    for li in element.find_all('li', class_='mshfa-features__item-li'):  # Add class filter
-                        li_text = self.clean_text(li.get_text())
-                        if li_text and li_text not in seen_content:
-                            list_items.append(li_text)
-                            seen_content.add(li_text)
-                    
-                    # If no items found with class, try without class filter
-                    if not list_items:
-                        for li in element.find_all('li'):
-                            li_text = self.clean_text(li.get_text())
-                            if li_text and li_text not in seen_content:
-                                list_items.append(li_text)
-                                seen_content.add(li_text)
-                    
-                    if list_items:
-                        # Also capture the list title if present
-                        list_title = None
-                        title_elem = element.find_previous_sibling('p', class_='mshfa-features__item-title')
-                        if title_elem:
-                            list_title = self.clean_text(title_elem.get_text())
-                        
+                    text = self.clean_text(element.get_text())
+                    if text and text not in seen_content:  # Remove the main_content check
                         structured_content.append({
-                            'type': 'list',
-                            'title': list_title,  # Add title to the list structure
-                            'items': list_items,
-                            'tag': element.name
+                            'type': 'paragraph',
+                            'content': text,
+                            'tag': 'p'
                         })
+                        seen_content.add(text)
 
-            # Process children only for container elements
-            if element.name in ['div', 'section', 'article', 'main', 'body', 'span']:  # Added 'span'
-                for child in element.children:
-                    process_element(child)
+            # Process children
+            for child in element.children:
+                process_element(child)
+                
+        # First, try to find h1 in the original soup 
+        h1_element = soup.find('h1')
+        if h1_element:
+            h1_text = self.clean_text(h1_element.get_text())
+            if h1_text and h1_text not in seen_content:
+                structured_content.append({
+                    'type': 'heading',
+                    'level': 1,
+                    'content': h1_text,
+                    'tag': 'h1'
+                })
+                seen_content.add(h1_text)
 
-        # Start processing from body
+        # Process the original soup to maintain structure
         if soup.body:
             process_element(soup.body)
-
-        # Create full_text while preserving structure
+        # Create full_text with structure
         full_text_parts = []
         h1_text = None
         h2_tags = []
@@ -576,30 +783,23 @@ class Crawler:
             elif item['type'] == 'paragraph':
                 full_text_parts.append(f"[P_START]\n{item['content']}\n[P_END]")
             elif item['type'] == 'list':
-                if item.get('title'):
+                # Only add the title if it exists and hasn't been added before
+                if item.get('title') and item['title'] not in seen_content:
                     full_text_parts.append(f"[P_START]\n{item['title']}\n[P_END]")
+                    seen_content.add(item['title'])
+                # Add the list items
                 list_text = "\n".join(f"• {list_item}" for list_item in item['items'])
                 full_text_parts.append(f"[LIST_START]\n{list_text}\n[LIST_END]")
-        
-        # Join parts and calculate word count safely
-        try:
-            full_text = "\n\n".join(full_text_parts)
-            # Calculate word count from all text content
-            word_count = sum(len(item.get('content', '').split()) for item in structured_content)
-            word_count += sum(len(item.get('items', [])) for item in structured_content if item['type'] == 'list')
-        except Exception as e:
-            print(f"Error processing text: {e}")
-            full_text = ""
-            word_count = 0
 
-        # Get body text using trafilatura
-        try:
-            body_text = trafilatura.extract(str(soup)) or ""
-        except Exception as e:
-            print(f"Error extracting body text: {e}")
-            body_text = ""
 
-        return {
+        full_text = "\n\n".join(full_text_parts)
+        body_text = main_content  # Use trafilatura's output for body_text
+
+        # Calculate word count
+        word_count = sum(len(item.get('content', '').split()) for item in structured_content)
+        word_count += sum(len(item.get('items', [])) for item in structured_content if item['type'] == 'list')
+
+        result = {
             "url": url,
             "title": title,
             "meta_description": meta_description,
@@ -607,12 +807,14 @@ class Crawler:
             "h2": h2_tags,
             "h3": h3_tags,
             "body_text": body_text,
-            # "structured_content": structured_content,  # New field
             "full_text": full_text,
             "word_count": word_count,
             "parse_method": "basic",
             "status": "partial" if word_count < settings.MIN_WORD_COUNT else "success"
         }
+        logger.info(f"Result in extract_content_basic in crawler.py: {result}")
+        
+        return result
     
     async def extract_content_playwright(self, url: str) -> Dict:
         """Extract content using Playwright for JavaScript-rendered pages."""
