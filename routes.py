@@ -1039,6 +1039,7 @@ async def add_keywords(
         url = request_data.get("url")
         batch_id = request_data.get("batch_id")
         keywords = request_data.get("keywords")
+        existing_keywords = request_data.get("existing_keywords")
         
         if not url or not batch_id:
             raise HTTPException(status_code=400, detail="URL and batch_id are required")
@@ -1051,10 +1052,29 @@ async def add_keywords(
         
         if not content:
             raise HTTPException(status_code=404, detail="Content not found")
-
+        
+        # Sort existing keywords by impressions in descending order
+        if existing_keywords:
+            existing_keywords = sorted(
+                existing_keywords,
+                key=lambda x: x.get('impressions', 0),
+                reverse=True
+            )
+            
+        print(f"Sorted existing keywords in add_keywords: {existing_keywords}")
+        # Sort new keywords by impressions in descending order
+        if keywords:
+            keywords = sorted(
+                keywords,
+                key=lambda x: x.get('impressions', 0),
+                reverse=True
+            )
+        print(f"Sorted keywords in add_keywords: {keywords}")
+        
         optimization_data = {
             "original_content": content.full_text,
-            "keywords": keywords
+            "keywords": keywords,
+            "existing_keywords": existing_keywords
         }
         
         # Send to AI service

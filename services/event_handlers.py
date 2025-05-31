@@ -77,10 +77,14 @@ class AddKeywordsProcessor(BaseProcessor):
             optimization_data = json.loads(data.get('text', '{}'))
             logger.debug(f"Processing add keywords data: {optimization_data}")
             
+            print(f"Keywords in AddKeywordsProcessor: {optimization_data['keywords']}")
+            print(f"Existing keywords in AddKeywordsProcessor: {optimization_data['existing_keywords']}")
+            
             # Just format the data for the AI service
             formatted_data = {
                 'original_content': optimization_data.get('original_content'),
-                'keywords': optimization_data.get('keywords', [])
+                'keywords': optimization_data.get('keywords', []),
+                'existing_keywords': optimization_data.get('existing_keywords', [])
             }
             
             logger.debug(f"Formatted data for AI service: {formatted_data}")
