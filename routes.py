@@ -1053,13 +1053,13 @@ async def add_keywords(
         if not content:
             raise HTTPException(status_code=404, detail="Content not found")
         
-        # Sort existing keywords by impressions in descending order
+        # Sort existing keywords by impressions in descending order and take only top 20
         if existing_keywords:
             existing_keywords = sorted(
                 existing_keywords,
                 key=lambda x: x.get('impressions', 0),
                 reverse=True
-            )
+            )[:20]
             
         print(f"Sorted existing keywords in add_keywords: {existing_keywords}")
         # Sort new keywords by impressions in descending order
