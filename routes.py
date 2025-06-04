@@ -1040,6 +1040,9 @@ async def add_keywords(
         batch_id = request_data.get("batch_id")
         keywords = request_data.get("keywords")
         existing_keywords = request_data.get("existing_keywords")
+        excluded_keywords = request_data.get("excluded_keywords")
+        
+        print(f"Excluded keywords in add_keywords route: {excluded_keywords}")
         
         if not url or not batch_id:
             raise HTTPException(status_code=400, detail="URL and batch_id are required")
@@ -1074,7 +1077,8 @@ async def add_keywords(
         optimization_data = {
             "original_content": content.full_text,
             "keywords": keywords,
-            "existing_keywords": existing_keywords
+            "existing_keywords": existing_keywords,
+            "excluded_keywords": excluded_keywords
         }
         
         # Send to AI service

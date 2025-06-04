@@ -79,12 +79,14 @@ class AddKeywordsProcessor(BaseProcessor):
             
             print(f"Keywords in AddKeywordsProcessor: {optimization_data['keywords']}")
             print(f"Existing keywords in AddKeywordsProcessor: {optimization_data['existing_keywords']}")
+            print(f"Excluded keywords in AddKeywordsProcessor: {optimization_data['excluded_keywords']}")
             
             # Just format the data for the AI service
             formatted_data = {
                 'original_content': optimization_data.get('original_content'),
                 'keywords': optimization_data.get('keywords', []),
-                'existing_keywords': optimization_data.get('existing_keywords', [])
+                'existing_keywords': optimization_data.get('existing_keywords', []),
+                'excluded_keywords': optimization_data.get('excluded_keywords', [])
             }
             
             logger.debug(f"Formatted data for AI service: {formatted_data}")
